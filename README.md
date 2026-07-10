@@ -29,9 +29,3 @@ This project is going to be a standalone CLI tool that will be faster and easier
 ## Other Requirements
 
 As a Rust-based linter, it should stay **very** fast, even for large codebases. It should be able to lint a codebase with thousands of files in a matter of seconds.
-
-## Current Goal
-
-To create a `docs/PLAN.md` file that outlines an actionable plan for implementing the features listed above, with no major open questions or ambiguities. The plan should be detailed enough that a developer can start implementing the features without needing to ask for clarification.
-
-The plan should include an overall architecture of the tool, directory structure, decisions made, and a breakdown of the features into smaller tasks. It should also include any necessary research or exploration that needs to be done before implementation can begin.
