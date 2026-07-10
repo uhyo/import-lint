@@ -1,0 +1,15 @@
+[package]
+name = "import_lint_cli"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[[bin]]
+name = "import-lint"
+path = "src/main.rs"
+
+[dependencies]
+clap = { workspace = true }

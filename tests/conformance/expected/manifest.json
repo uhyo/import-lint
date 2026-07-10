@@ -1,0 +1,109 @@
+{
+  "referenceRepo": {
+    "name": "eslint-plugin-import-access",
+    "version": "3.1.0"
+  },
+  "generatedAt": "2026-07-10T12:18:33.328Z",
+  "fixtureRoot": "tests/conformance/fixtures/project",
+  "optionSets": {
+    "default": {
+      "file": "default.json",
+      "options": {},
+      "diagnosticCount": 30
+    },
+    "index-loophole-false": {
+      "file": "index-loophole-false.json",
+      "options": {
+        "indexLoophole": false
+      },
+      "diagnosticCount": 33
+    },
+    "index-loophole-false-filename-loophole-true": {
+      "file": "index-loophole-false-filename-loophole-true.json",
+      "options": {
+        "indexLoophole": false,
+        "filenameLoophole": true
+      },
+      "diagnosticCount": 30
+    },
+    "default-importability-package": {
+      "file": "default-importability-package.json",
+      "options": {
+        "defaultImportability": "package"
+      },
+      "diagnosticCount": 34
+    },
+    "default-importability-package-exclude-source-patterns": {
+      "file": "default-importability-package-exclude-source-patterns.json",
+      "options": {
+        "defaultImportability": "package",
+        "excludeSourcePatterns": [
+          "src/exclude-patterns/types/**"
+        ]
+      },
+      "diagnosticCount": 33
+    },
+    "default-importability-private": {
+      "file": "default-importability-private.json",
+      "options": {
+        "defaultImportability": "private"
+      },
+      "diagnosticCount": 35
+    },
+    "default-importability-private-self-reference-internal": {
+      "file": "default-importability-private-self-reference-internal.json",
+      "options": {
+        "defaultImportability": "private",
+        "treatSelfReferenceAs": "internal"
+      },
+      "diagnosticCount": 36
+    },
+    "default-importability-private-self-reference-external": {
+      "file": "default-importability-private-self-reference-external.json",
+      "options": {
+        "defaultImportability": "private",
+        "treatSelfReferenceAs": "external"
+      },
+      "diagnosticCount": 35
+    },
+    "package-directory-no-internal": {
+      "file": "package-directory-no-internal.json",
+      "options": {
+        "packageDirectory": [
+          "**",
+          "!**/_internal"
+        ]
+      },
+      "diagnosticCount": 28
+    },
+    "package-directory-all-star": {
+      "file": "package-directory-all-star.json",
+      "options": {
+        "packageDirectory": [
+          "**"
+        ]
+      },
+      "diagnosticCount": 30
+    },
+    "package-directory-no-internal-filename-loophole": {
+      "file": "package-directory-no-internal-filename-loophole.json",
+      "options": {
+        "packageDirectory": [
+          "**",
+          "!**/_internal"
+        ],
+        "filenameLoophole": true
+      },
+      "diagnosticCount": 25
+    },
+    "package-directory-packages-glob": {
+      "file": "package-directory-packages-glob.json",
+      "options": {
+        "packageDirectory": [
+          "src/package-directory/packages/*"
+        ]
+      },
+      "diagnosticCount": 29
+    }
+  }
+}

@@ -44,7 +44,7 @@ config load ─► file discovery ─► parse+extract (parallel) ─► link (r
 1. **Config load** — locate `.importlintrc.jsonc` upward from cwd (or `--config`); merge CLI flags; locate and parse `tsconfig.json` (path from config, default `./tsconfig.json` if present) for resolver options.
 2. **File discovery** — `ignore` crate parallel walker from the configured roots; include `.ts .tsx .mts .cts .js .jsx .mjs .cjs .d.ts .d.mts .d.cts`; respect `.gitignore` plus config `include`/`exclude` globs.
 3. **Parse + extract** (rayon, `AllocatorPool`, one arena per worker, `reset()` per file) — per file, produce an **owned** `FileModuleInfo` (see §2.2) and immediately release the arena. This is the *only* phase that touches oxc AST lifetimes.
-4. **Link** — resolve every distinct `(importer dir, specifier)` through a single shared `Arc<Resolver>`; consult the ambient-module map first for bare specifiers; classify provenance (Internal(path) / External / Unresolved / SelfReference); build the module graph and the reverse-edge index (needed for watch).
+4. **Link** — resolve every distinct `(importer file, specifier)` pair through a single shared `Arc<Resolver>` (spike S3: `resolve_dts()` takes a containing *file*, not a directory; a dir-keyed cache with a synthesized filename is a valid optimization); consult the ambient-module map first for bare specifiers; classify provenance (Internal(path) / External / Unresolved / SelfReference); build the module graph and the reverse-edge index (needed for watch).
 5. **Check** — per file in parallel, for each checkable entry (import specifier, default import, re-export specifier), run the importability algorithm (§3) against the target file's export table. Pure function of `(importer info, exporter info, options)` — no global mutation, trivially parallel.
 6. **Report** — sort diagnostics by (file, span), render in the selected format, exit 0 (clean) / 1 (diagnostics) / 2 (usage or internal error).
 
@@ -117,9 +117,11 @@ check(entry):
 `lookup`: if the name is in `target.export_table`, done (exporter_file = target — one hop,
 even if that entry is itself a passthrough re-export). If not found and `target` has
 `star_exports`, descend depth-first through them (cycle-guarded) until a file whose
-export table contains the name is found; that file is the exporter. **The exact
-star-export semantics must be confirmed against the reference in spike S1 (§10) before
-this part is finalized.**
+export table contains the name is found; that file is the exporter. **Confirmed by spike
+S1** (see `docs/research/spike-s1-star-exports.md`): named entries — including
+passthrough re-exports and `export * as ns` — win over star exports and stop at one hop;
+bare `export *` descent flattens (through chains) to the original declaring file, which
+is also the exporter for the directory check.
 
 `isInPackage` implements spec §3.3 verbatim: index-loophole suffix strip → package-dir
 resolution (walk-up with `packageDirectory` globs, else `dirname`) → same-dir equality →
@@ -248,6 +250,13 @@ machine (8 cores); watch-mode incremental cycle **< 100 ms** for a single-file e
 ## 10. Pre-implementation spikes (M0)
 
 Small experiments that de-risk the plan; each produces a note in `docs/research/`.
+
+> **Status: all five spikes resolved 2026-07-10.** Full evidence in `docs/research/spike-s*.md`. Summary:
+> - **S1** (`spike-s1-star-exports.md`): `@package`/`@private` IS enforced through `export * from`, including chains; the exporter for the directory check is always the original declaring file, never the barrel. Explicit named (re-)exports shadow star exports and follow ordinary one-hop rules (no descent into the original's JSDoc). `export * as ns` is an ordinary named export `ns` of the barrel itself; `ns.x` member access is never checked.
+> - **S2** (`spike-s2-jsdoc-attachment.md`): `JSDocFinder` attaches on the wrapping `ExportNamedDeclaration`/`ExportDefaultDeclaration` for all forms **except** `TSExportAssignment` (`export =`) and `TSModuleDeclaration` (`declare module`) — those two need the nearest-preceding-comment fallback (working snippet in the note). **Critical:** build semantics with `SemanticBuilder::new_linter()` — the default builder skips node building and every JSDoc lookup silently returns `None`.
+> - **S3** (`spike-s3-resolver-provenance.md`): all 14 provenance cases pass. Use `resolve_dts()` as the sole resolution entry point (plain `resolve()` cannot reach types-only packages). External classification: `Resolution::package_json().path()` is pre-symlink-canonicalization, so checking it for a `node_modules` path component correctly classifies symlinked workspace packages as external (with a resolved-path fallback when there is no package.json). Recommended `ResolveOptions` in the note.
+> - **S4** (`spike-s4-export-assignment.md`): default imports against an `export =` file ARE checked; the export-table key is the literal `"export="` (distinct from `"default"`), and only JSDoc directly on the `export =` statement counts — JSDoc on the referenced declaration is ignored.
+> - **S5** (`spike-s5-watch-wsl2.md`): inotify via `notify`'s recommended watcher is reliable on WSL2 ext4 (incl. atomic-save renames). DrvFS/Windows-side edits were untestable in this environment — keep `--watch-poll`, and give the poll fallback a proper harness in M6.
 
 - **S1 — star-export semantics of the reference (behavioral question).** Add temp test fixtures to the reference repo: `import { x } from "./barrel"` where `barrel.ts` is `export * from "./inner"` and `inner.ts` has `@package`/`@private` on `x`. Determine: is the check applied, and is the exporter `inner.ts` (symbol flows through star exports without an alias hop) or skipped? Also `export * as ns from`. Encode the answer in `lookup()` (§2.3) and the conformance snapshots. *This is the one place the spec doc has a genuine gap.*
 - **S2 — JSDoc attachment coverage in oxc.** Verify `JSDocFinder` attaches JSDoc to: `export const/function/class`, `export default <expr>`, `ExportNamedDeclaration` (`/** @private */ export { x } from "./y";`), `export interface` / `export type`. Known risk from oxc issue #1506. Fallback for any gap: manual nearest-preceding-`/**`-comment association via `Semantic::comments_range()` (implement behind the same internal API so callers don't care).

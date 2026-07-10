@@ -1,0 +1,30 @@
+[workspace]
+resolver = "3"
+members = ["crates/core", "crates/cli"]
+
+[workspace.package]
+edition = "2024"
+rust-version = "1.94"
+version = "0.1.0"
+license = "MIT"
+repository = "https://github.com/uhyo/import-lint"
+
+[workspace.dependencies]
+# oxc toolchain — pre-1.0, pinned to exact versions (see docs/PLAN.md D10 and
+# docs/research/oxc-ecosystem.md). Bump deliberately, re-verify APIs on upgrade.
+oxc_allocator = { version = "=0.139.0", features = ["pool"] }
+oxc_ast = "=0.139.0"
+oxc_diagnostics = "=0.139.0"
+oxc_jsdoc = "=0.139.0"
+oxc_parser = "=0.139.0"
+oxc_resolver = "=11.23.0"
+oxc_semantic = { version = "=0.139.0", features = ["jsdoc"] }
+oxc_span = "=0.139.0"
+
+# Other dependencies anticipated by docs/PLAN.md (not oxc, so caret ranges are fine).
+clap = { version = "4.6", features = ["derive"] }
+globset = "0.4"
+ignore = "0.4"
+jsonc-parser = "0.33"
+rayon = "1.10"
+serde = { version = "1.0", features = ["derive"] }

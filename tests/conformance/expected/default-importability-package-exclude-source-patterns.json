@@ -1,0 +1,332 @@
+[
+  {
+    "file": "src/class/barUser.ts",
+    "line": 1,
+    "column": 10,
+    "endLine": 1,
+    "endColumn": 26,
+    "messageId": "package",
+    "message": "Cannot import a package-private export 'barAccessPackage'",
+    "identifier": "barAccessPackage"
+  },
+  {
+    "file": "src/class/barUser.ts",
+    "line": 1,
+    "column": 28,
+    "endLine": 1,
+    "endColumn": 38,
+    "messageId": "package",
+    "message": "Cannot import a package-private export 'barPackage'",
+    "identifier": "barPackage"
+  },
+  {
+    "file": "src/class/barUser.ts",
+    "line": 1,
+    "column": 40,
+    "endLine": 1,
+    "endColumn": 61,
+    "messageId": "package",
+    "message": "Cannot import a package-private export 'barPackage'",
+    "identifier": "barPackage"
+  },
+  {
+    "file": "src/class/bazUser.ts",
+    "line": 1,
+    "column": 8,
+    "endLine": 1,
+    "endColumn": 18,
+    "messageId": "package",
+    "message": "Cannot import a package-private export 'default'",
+    "identifier": "default"
+  },
+  {
+    "file": "src/default-export/foo.ts",
+    "line": 1,
+    "column": 8,
+    "endLine": 1,
+    "endColumn": 12,
+    "messageId": "package",
+    "message": "Cannot import a package-private export 'default'",
+    "identifier": "default"
+  },
+  {
+    "file": "src/default-export/foo.ts",
+    "line": 2,
+    "column": 8,
+    "endLine": 2,
+    "endColumn": 11,
+    "messageId": "package",
+    "message": "Cannot import a package-private export 'default'",
+    "identifier": "default"
+  },
+  {
+    "file": "src/default-export/foo.ts",
+    "line": 4,
+    "column": 10,
+    "endLine": 4,
+    "endColumn": 25,
+    "messageId": "package",
+    "message": "Cannot import a package-private export 'default'",
+    "identifier": "default"
+  },
+  {
+    "file": "src/directory-structure/sub/sub3/siblingUser.ts",
+    "line": 1,
+    "column": 10,
+    "endLine": 1,
+    "endColumn": 19,
+    "messageId": "package",
+    "message": "Cannot import a package-private export 'subsubVar'",
+    "identifier": "subsubVar"
+  },
+  {
+    "file": "src/directory-structure/subsubUser.ts",
+    "line": 1,
+    "column": 10,
+    "endLine": 1,
+    "endColumn": 19,
+    "messageId": "package",
+    "message": "Cannot import a package-private export 'subsubVar'",
+    "identifier": "subsubVar"
+  },
+  {
+    "file": "src/function/barUser.ts",
+    "line": 1,
+    "column": 10,
+    "endLine": 1,
+    "endColumn": 26,
+    "messageId": "package",
+    "message": "Cannot import a package-private export 'barAccessPackage'",
+    "identifier": "barAccessPackage"
+  },
+  {
+    "file": "src/function/barUser.ts",
+    "line": 1,
+    "column": 28,
+    "endLine": 1,
+    "endColumn": 38,
+    "messageId": "package",
+    "message": "Cannot import a package-private export 'barPackage'",
+    "identifier": "barPackage"
+  },
+  {
+    "file": "src/function/barUser.ts",
+    "line": 1,
+    "column": 40,
+    "endLine": 1,
+    "endColumn": 61,
+    "messageId": "package",
+    "message": "Cannot import a package-private export 'barPackage'",
+    "identifier": "barPackage"
+  },
+  {
+    "file": "src/function/bazUser.ts",
+    "line": 1,
+    "column": 8,
+    "endLine": 1,
+    "endColumn": 18,
+    "messageId": "package",
+    "message": "Cannot import a package-private export 'default'",
+    "identifier": "default"
+  },
+  {
+    "file": "src/package-directory/crossPackageUser.ts",
+    "line": 3,
+    "column": 10,
+    "endLine": 3,
+    "endColumn": 27,
+    "messageId": "package",
+    "message": "Cannot import a package-private export 'subInternalHelper'",
+    "identifier": "subInternalHelper"
+  },
+  {
+    "file": "src/package-directory/filenameLoophole/sub.ts",
+    "line": 2,
+    "column": 10,
+    "endLine": 2,
+    "endColumn": 19,
+    "messageId": "package",
+    "message": "Cannot import a package-private export 'subHelper'",
+    "identifier": "subHelper"
+  },
+  {
+    "file": "src/package-directory/packages/packageA/user.ts",
+    "line": 2,
+    "column": 10,
+    "endLine": 2,
+    "endColumn": 20,
+    "messageId": "package",
+    "message": "Cannot import a package-private export 'deepHelper'",
+    "identifier": "deepHelper"
+  },
+  {
+    "file": "src/package-directory/packages/packageB/crossUser.ts",
+    "line": 2,
+    "column": 10,
+    "endLine": 2,
+    "endColumn": 24,
+    "messageId": "package",
+    "message": "Cannot import a package-private export 'packageAHelper'",
+    "identifier": "packageAHelper"
+  },
+  {
+    "file": "src/package-directory/sub/subUser.ts",
+    "line": 1,
+    "column": 10,
+    "endLine": 1,
+    "endColumn": 27,
+    "messageId": "package",
+    "message": "Cannot import a package-private export 'subInternalHelper'",
+    "identifier": "subInternalHelper"
+  },
+  {
+    "file": "src/package-directory/user.ts",
+    "line": 1,
+    "column": 10,
+    "endLine": 1,
+    "endColumn": 24,
+    "messageId": "package",
+    "message": "Cannot import a package-private export 'internalHelper'",
+    "identifier": "internalHelper"
+  },
+  {
+    "file": "src/reexport/useBaz.ts",
+    "line": 1,
+    "column": 10,
+    "endLine": 1,
+    "endColumn": 16,
+    "messageId": "private",
+    "message": "Cannot import a private export 'subBaz'",
+    "identifier": "subBaz"
+  },
+  {
+    "file": "src/reexport/useFoo.ts",
+    "line": 1,
+    "column": 18,
+    "endLine": 1,
+    "endColumn": 31,
+    "messageId": "private",
+    "message": "Cannot import a private export 'subFooPrivate'",
+    "identifier": "subFooPrivate"
+  },
+  {
+    "file": "src/reexport2/sub.ts",
+    "line": 1,
+    "column": 10,
+    "endLine": 1,
+    "endColumn": 16,
+    "messageId": "package",
+    "message": "Cannot import a package-private export 'subFoo'",
+    "identifier": "subFoo"
+  },
+  {
+    "file": "src/reexport2/sub.ts",
+    "line": 2,
+    "column": 10,
+    "endLine": 2,
+    "endColumn": 16,
+    "messageId": "package",
+    "message": "Cannot import a package-private export 'subBar'",
+    "identifier": "subBar"
+  },
+  {
+    "file": "src/reexport3/sub.ts",
+    "line": 2,
+    "column": 10,
+    "endLine": 2,
+    "endColumn": 16,
+    "messageId": "package",
+    "message": "Cannot import a package-private export 'subBar'",
+    "identifier": "subBar"
+  },
+  {
+    "file": "src/reexport3/sub3/sub.ts",
+    "line": 2,
+    "column": 10,
+    "endLine": 2,
+    "endColumn": 16,
+    "messageId": "package",
+    "message": "Cannot import a package-private export 'subBar'",
+    "identifier": "subBar"
+  },
+  {
+    "file": "src/reexport4/filenameLoophole/sub.ts",
+    "line": 1,
+    "column": 10,
+    "endLine": 1,
+    "endColumn": 16,
+    "messageId": "package:reexport",
+    "message": "Cannot re-export a package-private export 'subFoo'",
+    "identifier": "subFoo"
+  },
+  {
+    "file": "src/reexport4/filenameLoophole/sub2.ts",
+    "line": 1,
+    "column": 10,
+    "endLine": 1,
+    "endColumn": 16,
+    "messageId": "package:reexport",
+    "message": "Cannot re-export a package-private export 'subFoo'",
+    "identifier": "subFoo"
+  },
+  {
+    "file": "src/reexport4/indexLoophole/reexportFromSubFoo.ts",
+    "line": 1,
+    "column": 10,
+    "endLine": 1,
+    "endColumn": 16,
+    "messageId": "package:reexport",
+    "message": "Cannot re-export a package-private export 'subFoo'",
+    "identifier": "subFoo"
+  },
+  {
+    "file": "src/type/barUser.ts",
+    "line": 1,
+    "column": 10,
+    "endLine": 1,
+    "endColumn": 22,
+    "messageId": "package",
+    "message": "Cannot import a package-private export 'barInterface'",
+    "identifier": "barInterface"
+  },
+  {
+    "file": "src/type/barUser.ts",
+    "line": 1,
+    "column": 24,
+    "endLine": 1,
+    "endColumn": 31,
+    "messageId": "package",
+    "message": "Cannot import a package-private export 'barType'",
+    "identifier": "barType"
+  },
+  {
+    "file": "src/variable/barUser.ts",
+    "line": 1,
+    "column": 10,
+    "endLine": 1,
+    "endColumn": 23,
+    "messageId": "package",
+    "message": "Cannot import a package-private export 'barDestructed'",
+    "identifier": "barDestructed"
+  },
+  {
+    "file": "src/variable/barUser.ts",
+    "line": 1,
+    "column": 25,
+    "endLine": 1,
+    "endColumn": 33,
+    "messageId": "package",
+    "message": "Cannot import a package-private export 'barValue'",
+    "identifier": "barValue"
+  },
+  {
+    "file": "src/variable/barUser.ts",
+    "line": 1,
+    "column": 35,
+    "endLine": 1,
+    "endColumn": 44,
+    "messageId": "package",
+    "message": "Cannot import a package-private export 'barValue2'",
+    "identifier": "barValue2"
+  }
+]
