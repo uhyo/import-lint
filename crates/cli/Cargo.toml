@@ -13,3 +13,10 @@ path = "src/main.rs"
 
 [dependencies]
 clap = { workspace = true }
+import_lint = { path = "../core" }
+oxc_allocator = { workspace = true }
+oxc_parser = { workspace = true }
+oxc_span = { workspace = true }
+oxc_str = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
