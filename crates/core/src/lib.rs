@@ -7,7 +7,11 @@
 //! the workspace root for the full design.
 
 pub mod extract;
+pub mod graph;
+pub mod resolve;
 
 pub use extract::{
     Access, CheckedEntry, EntryKind, ExportInfo, FileModuleInfo, extract as extract_file,
 };
+pub use graph::ModuleGraph;
+pub use resolve::{ProjectResolver, Provenance, SelfReferenceMode};

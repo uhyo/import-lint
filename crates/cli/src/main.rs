@@ -6,10 +6,11 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use clap::{Parser as ClapParser, Subcommand};
-use import_lint::{CheckedEntry, ExportInfo, FileModuleInfo, extract_file};
+use import_lint::{CheckedEntry, ExportInfo, FileModuleInfo, Provenance, extract_file};
+use import_lint_cli::runner::RunnerOptions;
+use import_lint_cli::source_type::{SUPPORTED_EXTENSIONS_MESSAGE, source_type_for_path};
 use oxc_allocator::Allocator;
 use oxc_parser::Parser as OxcParser;
-use oxc_span::SourceType;
 use oxc_str::CompactStr;
 use serde::Serialize;
 
@@ -32,6 +33,16 @@ enum Command {
         /// The file to inspect.
         file: PathBuf,
     },
+    /// Run discovery + the link phase and print the resulting module graph as JSON.
+    /// A debug aid for developing the pipeline and rule-engine phases.
+    Graph {
+        /// Root paths to walk (default: the current directory).
+        paths: Vec<PathBuf>,
+        /// Path to the project's `tsconfig.json` (default: `./tsconfig.json` if it
+        /// exists).
+        #[arg(long)]
+        tsconfig: Option<PathBuf>,
+    },
 }
 
 fn main() -> ExitCode {
@@ -39,6 +50,7 @@ fn main() -> ExitCode {
 
     match cli.command {
         Some(Command::Inspect { file }) => inspect(&file),
+        Some(Command::Graph { paths, tsconfig }) => graph(paths, tsconfig),
         None => {
             let _ = cli.paths;
             println!("import-lint: not yet implemented");
@@ -48,9 +60,9 @@ fn main() -> ExitCode {
 }
 
 fn inspect(file: &Path) -> ExitCode {
-    let Ok(source_type) = SourceType::from_path(file) else {
+    let Some(source_type) = source_type_for_path(file) else {
         eprintln!(
-            "import-lint: {}: unrecognized file extension (expected one of .js, .mjs, .cjs, .jsx, .ts, .mts, .cts, .tsx, .d.ts, .d.mts, .d.cts)",
+            "import-lint: {}: unrecognized file extension ({SUPPORTED_EXTENSIONS_MESSAGE})",
             file.display()
         );
         return ExitCode::from(2);
@@ -120,6 +132,130 @@ impl<'a> From<&'a FileModuleInfo> for InspectOutput<'a> {
             star_exports: &info.star_exports,
             ambient_modules: &info.ambient_modules,
             specifiers: &info.specifiers,
+        }
+    }
+}
+
+fn graph(paths: Vec<PathBuf>, tsconfig: Option<PathBuf>) -> ExitCode {
+    let roots = if paths.is_empty() {
+        vec![PathBuf::from(".")]
+    } else {
+        paths
+    };
+
+    let project_root = match std::env::current_dir() {
+        Ok(dir) => dir,
+        Err(err) => {
+            eprintln!("import-lint: cannot determine current directory: {err}");
+            return ExitCode::from(2);
+        }
+    };
+    let tsconfig = tsconfig.or_else(|| RunnerOptions::default_tsconfig(&project_root));
+
+    let options = RunnerOptions {
+        roots,
+        project_root,
+        tsconfig,
+        self_reference_mode: import_lint::SelfReferenceMode::default(),
+    };
+    let module_graph = import_lint_cli::run(&options);
+
+    match serde_json::to_string_pretty(&GraphOutput::from(&module_graph)) {
+        Ok(json) => {
+            println!("{json}");
+            ExitCode::SUCCESS
+        }
+        Err(err) => {
+            eprintln!("import-lint: failed to serialize graph output: {err}");
+            ExitCode::from(2)
+        }
+    }
+}
+
+/// A `Provenance` view for JSON output: `{"kind": "internal", "path": "..."}`,
+/// `{"kind": "external"}`, or `{"kind": "unresolved"}`.
+#[derive(Serialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+enum ResolutionOutput {
+    Internal { path: String },
+    External,
+    Unresolved,
+}
+
+impl From<&Provenance> for ResolutionOutput {
+    fn from(provenance: &Provenance) -> Self {
+        match provenance {
+            Provenance::Internal(path) => ResolutionOutput::Internal {
+                path: path.to_string_lossy().into_owned(),
+            },
+            Provenance::External => ResolutionOutput::External,
+            Provenance::Unresolved => ResolutionOutput::Unresolved,
+        }
+    }
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct FileOutput {
+    lint_target: bool,
+    resolutions: BTreeMap<String, ResolutionOutput>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct Summary {
+    files: usize,
+    lint_targets: usize,
+    internal: usize,
+    external: usize,
+    unresolved: usize,
+}
+
+/// A `ModuleGraph` view for JSON output with deterministic (`BTreeMap`) key order,
+/// mirroring `InspectOutput`'s treatment of `FileModuleInfo::export_table`.
+#[derive(Serialize)]
+struct GraphOutput {
+    files: BTreeMap<String, FileOutput>,
+    summary: Summary,
+}
+
+impl From<&import_lint::ModuleGraph> for GraphOutput {
+    fn from(graph: &import_lint::ModuleGraph) -> Self {
+        let mut files = BTreeMap::new();
+        let mut internal = 0;
+        let mut external = 0;
+        let mut unresolved = 0;
+
+        for (path, file) in &graph.files {
+            let mut resolutions = BTreeMap::new();
+            for specifier in &file.specifiers {
+                if let Some(provenance) = graph.resolution(path, specifier) {
+                    resolutions.insert(specifier.to_string(), ResolutionOutput::from(provenance));
+                    match provenance {
+                        Provenance::Internal(_) => internal += 1,
+                        Provenance::External => external += 1,
+                        Provenance::Unresolved => unresolved += 1,
+                    }
+                }
+            }
+            files.insert(
+                path.to_string_lossy().into_owned(),
+                FileOutput {
+                    lint_target: graph.lint_targets.contains(path),
+                    resolutions,
+                },
+            );
+        }
+
+        GraphOutput {
+            summary: Summary {
+                files: graph.files.len(),
+                lint_targets: graph.lint_targets.len(),
+                internal,
+                external,
+                unresolved,
+            },
+            files,
         }
     }
 }
