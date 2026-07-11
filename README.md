@@ -54,6 +54,8 @@ import-lint [paths...]
 | `--tsconfig <path>` | Path to the project's `tsconfig.json`, for resolver `paths`/`baseUrl`. Overrides the config file. | config `tsconfig`, else `<project root>/tsconfig.json` if present |
 | `--report-unresolved` | Emit a warning for every import specifier that fails to resolve, instead of skipping it silently. | off |
 | `--quiet` | Suppress warning-severity output (errors only), like `eslint --quiet`. | off |
+| `--watch` | Watch mode: re-lint on file changes — see [Watch mode](#watch-mode). | off |
+| `--watch-poll [ms]` | Watch mode using a polling watcher. Implies `--watch`. | off |
 
 Two debug subcommands are also available (not part of the stable output contract):
 `import-lint inspect <file>` dumps one file's extracted module info as JSON;
@@ -168,6 +170,51 @@ rule) are a hard load error (exit `2`) rather than a silently ignored no-op.
 `"severity": "warn"` are warnings — they're included in output (unless `--quiet`)
 but never affect the exit code.
 
+## Watch mode
+
+```sh
+import-lint --watch
+```
+
+Runs an initial lint, then keeps re-linting as files change until you kill the
+process (Ctrl-C). Each cycle re-prints the full diagnostic list — on a TTY with the
+default `pretty` format the screen is cleared first; piping/redirecting output (or
+`--format json`/`--format github`) just appends each cycle's full output, so
+`import-lint --watch --format json | tee log.jsonl` produces a readable transcript.
+A status line follows every re-render:
+
+```
+✖ 1 problem (1 error, 0 warnings) — rechecked 42 files in 8 ms (watching, Ctrl-C to exit)
+```
+
+**What triggers a re-run:**
+
+- Editing a file already picked up by the lint (a `.ts`/`.tsx`/`.js`/... file under
+  an `include` root) re-checks the whole project — cheaply, since only the changed
+  file(s) are re-parsed (everything else is served from an extraction cache).
+- Adding, removing, or renaming any file, or editing any `package.json`, re-walks
+  the project and rebuilds the resolver from scratch (a new or deleted file can
+  shadow a specifier resolution elsewhere).
+- Editing the config file (`.importlintrc.jsonc`/`.json`) or the `tsconfig.json`
+  reloads it and rebuilds everything. **If the edited config is invalid, the
+  previous config keeps running** (the error is reported, but watch mode never
+  exits on a bad config edit) — fix it and save again.
+
+**`--watch-poll [interval-ms]`** (default interval `500`) uses a polling watcher
+instead of the platform-recommended one (inotify on Linux). Use this:
+
+- **On WSL2, when editing files from the Windows side** (e.g. VS Code running on
+  Windows against a `\\wsl$\...` or `/mnt/c/...` path) — inotify does not reliably
+  see writes that originate outside the Linux VM (see
+  `docs/research/spike-s5-watch-wsl2.md`).
+- **On network filesystems** (NFS, Samba, and similar), where inotify support is
+  generally unreliable or absent.
+
+**Limitation:** `node_modules` is never watched (matching discovery, which never
+walks into it) — a `node_modules` change never triggers a re-run. Reinstalling
+dependencies or editing a linked/workspace package under `node_modules` requires
+restarting `import-lint --watch` manually.
+
 ## Migration from eslint-plugin-import-access
 
 ImportLint's `jsdoc` rule is a behavioral port of the plugin's `import-access/jsdoc`
@@ -194,6 +241,4 @@ rule, intended as a drop-in replacement:
 
 ## Roadmap
 
-- **Watch mode** (`--watch`) is planned for a future milestone and not yet
-  available — don't look for it in the flags above yet.
 - Prebuilt binaries and a crates.io release.

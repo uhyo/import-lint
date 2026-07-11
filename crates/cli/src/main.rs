@@ -1,21 +1,22 @@
 //! ImportLint CLI entry point.
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
 use std::fs;
 use std::io::{self, IsTerminal, Write};
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
+use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
+use std::time::Duration;
 
-use clap::{Parser as ClapParser, Subcommand, ValueEnum};
-use import_lint::diagnostics::line_col;
-use import_lint::rule::SelfRefOpt;
-use import_lint::{
-    CheckedEntry, ConfigError, ExportInfo, FileModuleInfo, LintConfig, Provenance, Severity,
-    check_graph, extract_file, find_config,
-};
-use import_lint_cli::output::{OutputSeverity, RenderedDiagnostic, eslint_json, github, pretty};
+use clap::{Parser as ClapParser, Subcommand};
+use import_lint::{CheckedEntry, ExportInfo, FileModuleInfo, Provenance, extract_file};
+use import_lint_cli::output::{OutputFormat, RenderedDiagnostic};
+use import_lint_cli::report::{ReportOptions, build_report};
 use import_lint_cli::runner::RunnerOptions;
+use import_lint_cli::setup;
 use import_lint_cli::source_type::{SUPPORTED_EXTENSIONS_MESSAGE, source_type_for_path};
+use import_lint_cli::watch::{CycleOutcome, WatchSession, WatchSessionOptions, watch_loop};
 use oxc_allocator::Allocator;
 use oxc_parser::Parser as OxcParser;
 use oxc_str::CompactStr;
@@ -58,13 +59,23 @@ struct Cli {
     /// Suppress warning-severity output (errors only), like `eslint --quiet`.
     #[arg(long)]
     quiet: bool,
-}
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, ValueEnum)]
-enum OutputFormat {
-    Pretty,
-    Json,
-    Github,
+    /// Watch mode: re-run whenever a watched file changes (PLAN.md §7). Uses the
+    /// platform-recommended watcher (inotify on Linux).
+    #[arg(long)]
+    watch: bool,
+
+    /// Watch mode using a polling watcher instead of the platform-recommended one.
+    /// Implies `--watch`. Recommended when editing from the Windows side on WSL2, or
+    /// over a network filesystem (NFS) — see README. Optional poll interval in
+    /// milliseconds (default: 500).
+    #[arg(
+        long,
+        value_name = "INTERVAL_MS",
+        num_args = 0..=1,
+        default_missing_value = "500"
+    )]
+    watch_poll: Option<u64>,
 }
 
 #[derive(Subcommand, Debug)]
@@ -93,6 +104,7 @@ fn main() -> ExitCode {
     match cli.command {
         Some(Command::Inspect { file }) => inspect(&file),
         Some(Command::Graph { paths, tsconfig }) => graph(paths, tsconfig),
+        None if cli.watch || cli.watch_poll.is_some() => watch_command(cli),
         None => lint(cli),
     }
 }
@@ -108,54 +120,19 @@ fn lint(cli: Cli) -> ExitCode {
         }
     };
 
-    let config_path = match &cli.config {
-        Some(explicit) => {
-            if !explicit.is_file() {
-                eprintln!("import-lint: --config {}: no such file", explicit.display());
-                return ExitCode::from(2);
-            }
-            Some(explicit.clone())
+    let loaded = match setup::load_config(cli.config.as_deref(), &cwd) {
+        Ok(loaded) => loaded,
+        Err(err) => {
+            eprintln!("import-lint: {err}");
+            return ExitCode::from(2);
         }
-        None => find_config(&cwd),
     };
+    let config = loaded.config;
+    let project_root = loaded.project_root;
 
-    let (config, project_root) = match config_path {
-        Some(path) => match LintConfig::load(&path) {
-            Ok(config) => {
-                let project_root = path
-                    .parent()
-                    .map(Path::to_path_buf)
-                    .unwrap_or_else(|| cwd.clone());
-                (config, project_root)
-            }
-            Err(err) => {
-                eprintln!("import-lint: {}", format_config_error(&err));
-                return ExitCode::from(2);
-            }
-        },
-        None => (LintConfig::default(), cwd.clone()),
-    };
-
-    let roots: Vec<PathBuf> = if cli.paths.is_empty() {
-        config
-            .include
-            .iter()
-            .map(|root| project_root.join(root))
-            .collect()
-    } else {
-        cli.paths.clone()
-    };
-
-    let tsconfig = cli
-        .tsconfig
-        .clone()
-        .or_else(|| config.tsconfig.as_ref().map(|path| project_root.join(path)))
-        .or_else(|| RunnerOptions::default_tsconfig(&project_root));
-
-    let self_reference_mode = match config.rules.jsdoc.options.treat_self_reference_as {
-        SelfRefOpt::Internal => import_lint::SelfReferenceMode::Internal,
-        SelfRefOpt::External => import_lint::SelfReferenceMode::External,
-    };
+    let roots = setup::compute_roots(&cli.paths, &config, &project_root);
+    let tsconfig = setup::compute_tsconfig(cli.tsconfig.as_deref(), &config, &project_root);
+    let self_reference_mode = setup::compute_self_reference_mode(&config);
 
     if let Some(threads) = cli.threads {
         // Ignore the error: it only fails if a global pool was already built (e.g.
@@ -175,118 +152,181 @@ fn lint(cli: Cli) -> ExitCode {
     };
     let module_graph = import_lint_cli::run(&runner_options);
 
-    let mut source_cache: HashMap<PathBuf, String> = HashMap::new();
-    let mut diagnostics: Vec<RenderedDiagnostic> = Vec::new();
-
-    let severity = config.rules.jsdoc.severity;
-    if severity != Severity::Off {
-        let output_severity = match severity {
-            Severity::Error => OutputSeverity::Error,
-            Severity::Warn => OutputSeverity::Warn,
-            Severity::Off => unreachable!("checked above"),
-        };
-        let core_diagnostics =
-            check_graph(&module_graph, &config.rules.jsdoc.options, &project_root);
-        for diagnostic in &core_diagnostics {
-            let source = read_cached(&mut source_cache, &diagnostic.path);
-            let (line, column) = line_col(source, diagnostic.span.start);
-            let (end_line, end_column) = line_col(source, diagnostic.span.end);
-            diagnostics.push(RenderedDiagnostic {
-                file: diagnostic.path.clone(),
-                line,
-                column,
-                end_line,
-                end_column,
-                severity: output_severity,
-                rule_id: "import-access/jsdoc",
-                message: diagnostic.message(),
-                message_id: diagnostic.message_id.as_str().to_string(),
-            });
-        }
-    }
-
-    if cli.report_unresolved {
-        collect_unresolved(&module_graph, &mut source_cache, &mut diagnostics);
-    }
-
-    diagnostics.sort_by(|a, b| (&a.file, a.line, a.column).cmp(&(&b.file, b.line, b.column)));
-
-    let has_error = diagnostics
-        .iter()
-        .any(|d| d.severity == OutputSeverity::Error);
-
-    if cli.quiet {
-        diagnostics.retain(|d| d.severity != OutputSeverity::Warn);
-    }
+    let report = build_report(
+        &module_graph,
+        &config,
+        &project_root,
+        &ReportOptions {
+            report_unresolved: cli.report_unresolved,
+            quiet: cli.quiet,
+        },
+    );
 
     let stdout = io::stdout();
     let colors = cli.format == OutputFormat::Pretty && stdout.is_terminal();
     let mut handle = stdout.lock();
-    let render_result = match cli.format {
-        OutputFormat::Pretty => pretty::render(&mut handle, &diagnostics, &cwd, colors),
-        OutputFormat::Json => {
-            let linted_files: Vec<PathBuf> = module_graph.lint_targets.iter().cloned().collect();
-            eslint_json::render(&mut handle, &diagnostics, &linted_files)
-        }
-        OutputFormat::Github => github::render(&mut handle, &diagnostics, &cwd),
-    };
+    let linted_files: Vec<PathBuf> = module_graph.lint_targets.iter().cloned().collect();
+    let render_result = cli.format.render(
+        &mut handle,
+        &report.diagnostics,
+        &cwd,
+        colors,
+        &linted_files,
+    );
     if let Err(err) = render_result.and_then(|()| handle.flush()) {
         eprintln!("import-lint: failed to write output: {err}");
         return ExitCode::from(2);
     }
 
-    if has_error {
+    if report.has_error {
         ExitCode::from(1)
     } else {
         ExitCode::SUCCESS
     }
 }
 
-fn format_config_error(err: &ConfigError) -> String {
-    format!("failed to load config: {err}")
-}
-
-fn read_cached<'a>(cache: &'a mut HashMap<PathBuf, String>, path: &Path) -> &'a str {
-    cache
-        .entry(path.to_path_buf())
-        .or_insert_with(|| fs::read_to_string(path).unwrap_or_default())
-}
-
-/// `--report-unresolved`: emit a warn-severity diagnostic for every checked entry
-/// whose specifier failed to resolve (D8's opt-in debug aid). These never affect
-/// the exit code (M5 brief §3).
-fn collect_unresolved(
-    graph: &import_lint::ModuleGraph,
-    source_cache: &mut HashMap<PathBuf, String>,
-    diagnostics: &mut Vec<RenderedDiagnostic>,
-) {
-    for target in &graph.lint_targets {
-        let Some(file) = graph.file(target) else {
-            continue;
-        };
-        for entry in &file.checked_entries {
-            if !matches!(
-                graph.resolution(target, &entry.specifier),
-                Some(Provenance::Unresolved)
-            ) {
-                continue;
-            }
-            let source = read_cached(source_cache, target);
-            let (line, column) = line_col(source, entry.span.start);
-            let (end_line, end_column) = line_col(source, entry.span.end);
-            diagnostics.push(RenderedDiagnostic {
-                file: target.clone(),
-                line,
-                column,
-                end_line,
-                end_column,
-                severity: OutputSeverity::Warn,
-                rule_id: "import-access/unresolved",
-                message: format!("Unresolved import specifier '{}'", entry.specifier),
-                message_id: "unresolved".to_string(),
-            });
+/// The `--watch`/`--watch-poll` invocation: build a `WatchSession` (which performs
+/// the initial full run), render its current state, then hand off to `watch_loop`
+/// forever — real filesystem events drive `WatchSession::run_cycle` from here on
+/// (PLAN.md §7, M6). Exits 2 only on a startup failure (bad `--config`, watcher
+/// setup failure); otherwise watch mode runs until the process is killed (default
+/// SIGINT behavior — no handler needed, M6 brief D-W4).
+fn watch_command(cli: Cli) -> ExitCode {
+    let cwd = match std::env::current_dir() {
+        Ok(dir) => dir,
+        Err(err) => {
+            eprintln!("import-lint: cannot determine current directory: {err}");
+            return ExitCode::from(2);
         }
+    };
+
+    if let Some(threads) = cli.threads {
+        let _ = rayon::ThreadPoolBuilder::new()
+            .num_threads(threads)
+            .build_global();
     }
+
+    let format = cli.format;
+    let poll_interval = cli.watch_poll.map(Duration::from_millis);
+
+    let session_options = WatchSessionOptions {
+        cli_paths: cli.paths.clone(),
+        explicit_config: cli.config.clone(),
+        cli_tsconfig: cli.tsconfig.clone(),
+        report_unresolved: cli.report_unresolved,
+        quiet: cli.quiet,
+        cwd: cwd.clone(),
+    };
+
+    let mut session = match WatchSession::new(session_options) {
+        Ok(session) => session,
+        Err(err) => {
+            eprintln!("import-lint: {err}");
+            return ExitCode::from(2);
+        }
+    };
+
+    let tty = io::stdout().is_terminal();
+    render_watch_state(session.last_diagnostics(), None, format, &cwd, tty);
+
+    // No shutdown signal is ever set from here: watch mode exits via the default
+    // (unhandled) SIGINT behavior, matching the M6 brief's "no handler needed".
+    // `shutdown` exists purely so `watch_loop` is drivable/stoppable from tests
+    // (`crates/cli/tests/watch.rs`) without relying on a real signal.
+    let shutdown = Arc::new(AtomicBool::new(false));
+    let debounce = Duration::from_millis(100);
+
+    let result = watch_loop(
+        &mut session,
+        debounce,
+        poll_interval,
+        &shutdown,
+        |outcome| {
+            render_watch_cycle(outcome, format, &cwd, tty);
+        },
+    );
+
+    if let Err(err) = result {
+        eprintln!("import-lint: watch mode failed to start: {err}");
+        return ExitCode::from(2);
+    }
+
+    ExitCode::SUCCESS
+}
+
+/// Render one watch-mode cycle (M6 brief D-W4): a full re-render each time (no
+/// incremental diffing), preceded by an ANSI clear-screen when stdout is a TTY and
+/// the format is `pretty` — `json`/`github` and non-TTY output just re-print in
+/// full, so piping/redirecting `import-lint --watch` produces a readable transcript.
+fn render_watch_cycle(outcome: &CycleOutcome, format: OutputFormat, cwd: &Path, tty: bool) {
+    let status = watch_status_line(outcome);
+    render_watch_state(
+        &outcome.diagnostics,
+        Some((&outcome.linted_files, &status)),
+        format,
+        cwd,
+        tty,
+    );
+}
+
+fn watch_status_line(outcome: &CycleOutcome) -> String {
+    let error_count = outcome
+        .diagnostics
+        .iter()
+        .filter(|d| d.severity == import_lint_cli::output::OutputSeverity::Error)
+        .count();
+    let warning_count = outcome.diagnostics.len() - error_count;
+    let millis = outcome.duration.as_millis();
+    let tail = format!(
+        "rechecked {} file{} in {millis} ms (watching, Ctrl-C to exit)",
+        outcome.rechecked_files,
+        if outcome.rechecked_files == 1 {
+            ""
+        } else {
+            "s"
+        }
+    );
+    if outcome.has_error || warning_count > 0 {
+        let total = outcome.diagnostics.len();
+        format!(
+            "\u{2716} {total} problem{} ({error_count} error{}, {warning_count} warning{}) \u{2014} {tail}",
+            if total == 1 { "" } else { "s" },
+            if error_count == 1 { "" } else { "s" },
+            if warning_count == 1 { "" } else { "s" },
+        )
+    } else {
+        format!("\u{2713} no problems \u{2014} {tail}")
+    }
+}
+
+/// Shared by the initial render (`status = None`, no clear) and every subsequent
+/// cycle (`status = Some((linted_files, status_line))`).
+fn render_watch_state(
+    diagnostics: &[RenderedDiagnostic],
+    status: Option<(&[PathBuf], &str)>,
+    format: OutputFormat,
+    cwd: &Path,
+    tty: bool,
+) {
+    let colors = tty && format == OutputFormat::Pretty;
+    let clear = tty && format == OutputFormat::Pretty && status.is_some();
+    let linted_files: &[PathBuf] = status.map(|(files, _)| files).unwrap_or(&[]);
+
+    let stdout = io::stdout();
+    let mut handle = stdout.lock();
+    if clear {
+        let _ = write!(handle, "\x1b[2J\x1b[H");
+    }
+    let _ = format.render(&mut handle, diagnostics, cwd, colors, linted_files);
+    if let Some((_, status_line)) = status {
+        let styled = if colors {
+            format!("\x1b[1m{status_line}\x1b[0m")
+        } else {
+            status_line.to_string()
+        };
+        let _ = writeln!(handle, "{styled}");
+    }
+    let _ = handle.flush();
 }
 
 fn inspect(file: &Path) -> ExitCode {

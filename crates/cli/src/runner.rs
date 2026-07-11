@@ -1,11 +1,19 @@
 //! Discovery + link orchestration (PLAN.md §2.1 steps 2–4, §8, M2): walk, then
 //! parse+extract and resolve in parallel (rayon + `AllocatorPool`), producing a
 //! [`ModuleGraph`]. The check phase (PLAN.md §2.1 step 5) is M3's job.
+//!
+//! M6 (watch mode, `docs/PLAN.md` §7) needs these stages callable individually with a
+//! caller-supplied [`ExtractionCache`], so a content-only file edit can skip
+//! re-parsing every untouched file while still rebuilding the graph from scratch each
+//! cycle (`crates/cli/src/watch.rs`'s `WatchSession`). [`run`] is the simple one-shot
+//! entry point everything else (M2–M5 callers, tests) already uses; it is unchanged
+//! and just wraps [`run_with_cache`] with a fresh, empty cache.
 
 use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::time::SystemTime;
 
 use import_lint::{FileModuleInfo, ModuleGraph, ProjectResolver, Provenance, SelfReferenceMode};
 use oxc_allocator::AllocatorPool;
@@ -44,6 +52,44 @@ impl RunnerOptions {
     }
 }
 
+/// One cached extraction result, keyed by file path (see [`ExtractionCache`]):
+/// `(mtime, size)` at the time of extraction, plus the owned result. A cache entry is
+/// reused only if a fresh `stat()` of the file still reports the same `mtime` and
+/// `size` — good enough to detect any real edit, and cheap (no content hashing).
+pub(crate) struct CachedExtraction {
+    mtime: SystemTime,
+    size: u64,
+    info: Arc<FileModuleInfo>,
+}
+
+/// Extraction cache keyed by absolute file path (M6, `docs/PLAN.md` §7, watch-mode
+/// brief D-W1): reused across pipeline runs so watch mode's content-only edit cycles
+/// only re-parse the files that actually changed. `WatchSession` owns one and
+/// invalidates entries for files it's told changed (belt-and-braces on top of the
+/// `mtime`/`size` check here, since some filesystems have coarse `mtime` resolution).
+pub(crate) type ExtractionCache = HashMap<PathBuf, CachedExtraction>;
+
+/// A batch of extraction results plus how many of them were actual cache misses
+/// (files that had to be re-parsed) — watch mode reports and tests this count
+/// directly (M6 brief D-W3). `pub(crate)` (not `pub`): only `watch.rs`'s
+/// content-only edit cycle needs to call [`extract_with_cache`] directly, to seed
+/// [`extract_and_link_from`] without going through [`run_with_cache`]'s "structural"
+/// (re-walk + fresh resolver) path.
+pub(crate) struct Extracted {
+    pub(crate) files: Vec<Arc<FileModuleInfo>>,
+    /// Number of `paths` that were NOT served from `cache` this call (i.e. were
+    /// missing, stale, or unreadable-for-stat and thus attempted for extraction).
+    pub(crate) extracted_files: usize,
+}
+
+/// Outcome of a full extract+link pass: the resulting graph plus the total number of
+/// files actually (re-)extracted (cache misses) across the whole pass, including any
+/// fixpoint-discovered files outside the walked set.
+pub struct RunOutcome {
+    pub graph: ModuleGraph,
+    pub extracted_files: usize,
+}
+
 /// Run the discovery + link pipeline: walk `options.roots`, parse+extract every file
 /// found, resolve every specifier they reference, and extract+resolve any internal
 /// resolution target outside the walked set too (so the one-hop check in M3 can look
@@ -51,45 +97,96 @@ impl RunnerOptions {
 /// `star_exports`) — repeating until a fixpoint is reached. Never panics on a single
 /// file's read/parse/resolve failure; such files are skipped with a stderr warning.
 pub fn run(options: &RunnerOptions) -> ModuleGraph {
+    let mut cache = ExtractionCache::new();
+    run_with_cache(options, &mut cache).graph
+}
+
+/// Same pipeline as [`run`], but extraction is served through `cache` (populated as
+/// it goes) instead of a throwaway one-shot cache. This is the "structural" build
+/// path (M6 brief D-W1): it walks `options.roots` from scratch and constructs a fresh
+/// [`ProjectResolver`], so it's what watch mode calls on startup and whenever the
+/// filesystem layout may have changed (file added/removed/renamed, `package.json`,
+/// config, or tsconfig edited).
+pub(crate) fn run_with_cache(options: &RunnerOptions, cache: &mut ExtractionCache) -> RunOutcome {
     let lint_target_paths = crate::walk::walk_with_excludes(
         &options.roots,
         Some(options.project_root.as_path()),
         &options.exclude,
     );
-    let lint_targets: HashSet<PathBuf> = lint_target_paths.iter().cloned().collect();
 
     let pool = AllocatorPool::new(rayon::current_num_threads());
+    let initial = extract_with_cache(&lint_target_paths, &pool, cache);
+    let resolver = build_resolver_from_files(options, &lint_target_paths, &initial.files);
+    extract_and_link_from(&lint_target_paths, initial, &resolver, &pool, cache)
+}
 
-    // `attempted` guards the fixpoint loop against cycles and against retrying a
-    // file that failed to read/parse on a previous pass: once a path has been
-    // attempted (successfully or not), it's never re-extracted.
-    let mut attempted: HashSet<PathBuf> = lint_target_paths.iter().cloned().collect();
-    let mut files: HashMap<PathBuf, Arc<FileModuleInfo>> = HashMap::new();
-    let mut resolutions: HashMap<(PathBuf, CompactStr), Provenance> = HashMap::new();
-
-    let mut pending: Vec<Arc<FileModuleInfo>> = extract_files(&lint_target_paths, &pool)
-        .into_iter()
-        .map(Arc::new)
+/// Build a fresh [`ProjectResolver`] for `options`, seeding the ambient-module
+/// registry (D6) from `initial_files` — the already-extracted walked set, restricted
+/// to lint targets inside it (same rule as the original M2 `run`: a `.d.ts` only
+/// reached later via the fixpoint loop never contributes ambient declarations).
+///
+/// Split out from [`run_with_cache`] so watch mode's "structural" reload path
+/// (`crates/cli/src/watch.rs`) can build the resolver once and reuse the same
+/// `initial_files` extraction as the seed for [`extract_and_link_from`], instead of
+/// extracting the walked set twice.
+pub(crate) fn build_resolver_from_files(
+    options: &RunnerOptions,
+    lint_target_paths: &[PathBuf],
+    initial_files: &[Arc<FileModuleInfo>],
+) -> ProjectResolver {
+    let lint_targets: HashSet<PathBuf> = lint_target_paths.iter().cloned().collect();
+    let files_by_path: HashMap<PathBuf, Arc<FileModuleInfo>> = initial_files
+        .iter()
+        .map(|file| (file.path.clone(), file.clone()))
         .collect();
-    for file in &pending {
-        files.insert(file.path.clone(), file.clone());
-    }
+    let ambient_modules = build_ambient_registry(&files_by_path, &lint_targets);
 
-    // Ambient-module registry (D6), built from the walked set only: a `.d.ts` only
-    // reached later via the fixpoint loop below never contributes ambient module
-    // declarations to the resolver. This is a deliberate simplification — ambient
-    // modules are project-authored and expected to live inside the walked tree.
-    let ambient_modules = build_ambient_registry(&files, &lint_targets);
-
-    let resolver = ProjectResolver::new(
+    ProjectResolver::new(
         &options.project_root,
         options.tsconfig.clone(),
         ambient_modules,
         options.self_reference_mode,
-    );
+    )
+}
+
+/// Extract+resolve `lint_target_paths` against `resolver` to a fixpoint (PLAN.md
+/// §2.1 steps 3–4): any internal resolution target outside the walked set is
+/// extracted and resolved too, so the one-hop check (M3) can look up its export
+/// table. `initial` is the already-extracted walked set (from [`extract_with_cache`]
+/// on `lint_target_paths`) — passing it in rather than re-deriving it from
+/// `lint_target_paths` lets callers reuse whatever extraction they already did (e.g.
+/// [`build_resolver_from_files`]'s ambient-registry pass) without a second cache
+/// lookup/extraction round, and keeps `extracted_files` counts from being
+/// double-counted.
+///
+/// This is the piece watch mode's content-only edit cycles call directly, reusing the
+/// previous walk result and [`ProjectResolver`] across cycles (M6 brief D-W1): only
+/// `cache` changes between cycles (entries for edited files invalidated by the
+/// caller), so re-running this is cheap when nothing relevant changed.
+pub(crate) fn extract_and_link_from(
+    lint_target_paths: &[PathBuf],
+    initial: Extracted,
+    resolver: &ProjectResolver,
+    pool: &AllocatorPool,
+    cache: &mut ExtractionCache,
+) -> RunOutcome {
+    let lint_targets: HashSet<PathBuf> = lint_target_paths.iter().cloned().collect();
+
+    // `attempted` guards the fixpoint loop against cycles and against retrying a
+    // file that failed to read/parse on a previous pass: once a path has been
+    // attempted (successfully or not) in this call, it's never re-extracted.
+    let mut attempted: HashSet<PathBuf> = lint_targets.clone();
+    let mut files: HashMap<PathBuf, Arc<FileModuleInfo>> = HashMap::new();
+    let mut resolutions: HashMap<(PathBuf, CompactStr), Provenance> = HashMap::new();
+    let mut extracted_files = initial.extracted_files;
+
+    let mut pending = initial.files;
+    for file in &pending {
+        files.insert(file.path.clone(), file.clone());
+    }
 
     loop {
-        resolutions.extend(resolve_pairs(&pending, &resolver));
+        resolutions.extend(resolve_pairs(&pending, resolver));
 
         let mut new_targets: Vec<PathBuf> = resolutions
             .values()
@@ -106,16 +203,89 @@ pub fn run(options: &RunnerOptions) -> ModuleGraph {
         }
         attempted.extend(new_targets.iter().cloned());
 
-        pending = extract_files(&new_targets, &pool)
-            .into_iter()
-            .map(Arc::new)
-            .collect();
+        let next = extract_with_cache(&new_targets, pool, cache);
+        extracted_files += next.extracted_files;
+        pending = next.files;
         for file in &pending {
             files.insert(file.path.clone(), file.clone());
         }
     }
 
-    ModuleGraph::build(files.into_values().collect(), resolutions, lint_targets)
+    RunOutcome {
+        graph: ModuleGraph::build(files.into_values().collect(), resolutions, lint_targets),
+        extracted_files,
+    }
+}
+
+/// Extract every path in `paths`, serving already-extracted, unchanged files from
+/// `cache` and only actually parsing (rayon + `AllocatorPool`, PLAN.md §8) the ones
+/// that are missing or whose `(mtime, size)` no longer matches the cached entry.
+/// Freshly extracted files are inserted into `cache` before returning.
+///
+/// `pub(crate)`: exposed so `watch.rs`'s content-only edit cycle can extract the
+/// (unchanged) walked set through the cache directly, as the seed for
+/// [`extract_and_link_from`], without re-walking or rebuilding the resolver.
+pub(crate) fn extract_with_cache(
+    paths: &[PathBuf],
+    pool: &AllocatorPool,
+    cache: &mut ExtractionCache,
+) -> Extracted {
+    let mut files: Vec<Arc<FileModuleInfo>> = Vec::with_capacity(paths.len());
+    let mut miss_paths: Vec<PathBuf> = Vec::new();
+
+    for path in paths {
+        match stat(path) {
+            Some((mtime, size)) => {
+                let cache_hit = cache
+                    .get(path)
+                    .is_some_and(|cached| cached.mtime == mtime && cached.size == size);
+                if cache_hit {
+                    // `cache_hit` guarantees `cache.get(path)` is `Some`.
+                    files.push(cache.get(path).unwrap().info.clone());
+                    continue;
+                }
+                miss_paths.push(path.clone());
+            }
+            None => {
+                // Can't stat: vanished between walking and extracting, a permission
+                // error, or (in principle) a platform without `mtime` support.
+                // Always treat as a miss — `extract_one`'s own read-error path
+                // reports/skips it — and drop any stale entry so a later
+                // re-appearance of the file at this path is picked up fresh rather
+                // than silently reusing old content.
+                cache.remove(path);
+                miss_paths.push(path.clone());
+            }
+        }
+    }
+
+    let extracted_files = miss_paths.len();
+    let newly_extracted = extract_files(&miss_paths, pool);
+    for info in newly_extracted {
+        let arc = Arc::new(info);
+        if let Some((mtime, size)) = stat(&arc.path) {
+            cache.insert(
+                arc.path.clone(),
+                CachedExtraction {
+                    mtime,
+                    size,
+                    info: arc.clone(),
+                },
+            );
+        }
+        files.push(arc);
+    }
+
+    Extracted {
+        files,
+        extracted_files,
+    }
+}
+
+fn stat(path: &Path) -> Option<(SystemTime, u64)> {
+    let meta = fs::metadata(path).ok()?;
+    let mtime = meta.modified().ok()?;
+    Some((mtime, meta.len()))
 }
 
 /// Parse+extract `paths` in parallel (rayon + `AllocatorPool` arena reuse, PLAN.md
