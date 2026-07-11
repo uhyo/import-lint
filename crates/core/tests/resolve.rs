@@ -320,3 +320,27 @@ fn self_reference_resolves_internal_in_internal_mode() {
         Provenance::Internal(target)
     );
 }
+
+/// A self-referenced subpath whose `exports` target names the compiled `.js` file
+/// must resolve to the `.ts` source actually on disk (TS-style extension
+/// substitution via `extension_alias`) — this is exactly the conformance
+/// fixture's `"./self-reference": "./src/self-reference/index.js"` shape.
+#[test]
+fn self_reference_exports_map_js_target_resolves_ts_source() {
+    let project = Project::new();
+    project.write(
+        "package.json",
+        r#"{
+            "name": "mypkg",
+            "exports": { "./sub": "./src/sub.js" }
+        }"#,
+    );
+    let target = project.write("src/sub.ts", "export const x = 1;\n");
+    let importer = project.write("src/importer.ts", "");
+    let resolver = project.resolver_with(None, HashMap::new(), SelfReferenceMode::Internal);
+
+    assert_eq!(
+        resolver.resolve(&importer, "mypkg/sub"),
+        Provenance::Internal(target)
+    );
+}

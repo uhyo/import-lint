@@ -274,3 +274,57 @@ fn to_snapshot(
 fn conformance_default() {
     run_option_set("default");
 }
+#[test]
+fn conformance_index_loophole_false() {
+    run_option_set("index-loophole-false");
+}
+
+#[test]
+fn conformance_index_loophole_false_filename_loophole_true() {
+    run_option_set("index-loophole-false-filename-loophole-true");
+}
+
+#[test]
+fn conformance_default_importability_package() {
+    run_option_set("default-importability-package");
+}
+
+#[test]
+fn conformance_default_importability_package_exclude_source_patterns() {
+    run_option_set("default-importability-package-exclude-source-patterns");
+}
+
+#[test]
+fn conformance_default_importability_private() {
+    run_option_set("default-importability-private");
+}
+
+#[test]
+fn conformance_default_importability_private_self_reference_internal() {
+    run_option_set("default-importability-private-self-reference-internal");
+}
+
+#[test]
+fn conformance_default_importability_private_self_reference_external() {
+    run_option_set("default-importability-private-self-reference-external");
+}
+
+#[test]
+fn conformance_package_directory_no_internal() {
+    run_option_set("package-directory-no-internal");
+}
+
+#[test]
+fn conformance_package_directory_all_star() {
+    run_option_set("package-directory-all-star");
+}
+
+#[test]
+fn conformance_package_directory_no_internal_filename_loophole() {
+    run_option_set("package-directory-no-internal-filename-loophole");
+}
+
+#[test]
+fn conformance_package_directory_packages_glob() {
+    run_option_set("package-directory-packages-glob");
+}

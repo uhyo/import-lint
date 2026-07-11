@@ -76,6 +76,32 @@ impl ProjectResolver {
                 "node".to_string(),
             ],
             main_fields: vec!["module".to_string(), "main".to_string()],
+            // TS-style extension substitution: a `.js`/`.jsx` path in source or an
+            // exports-map target may actually be implemented by a `.ts`/`.tsx`/`.d.ts`
+            // file on disk (e.g. self-reference through `"exports": { ".": "./x.js" }`).
+            extension_alias: vec![
+                (
+                    ".js".to_string(),
+                    vec![
+                        ".ts".to_string(),
+                        ".tsx".to_string(),
+                        ".d.ts".to_string(),
+                        ".js".to_string(),
+                    ],
+                ),
+                (
+                    ".jsx".to_string(),
+                    vec![".tsx".to_string(), ".jsx".to_string()],
+                ),
+                (
+                    ".mjs".to_string(),
+                    vec![".mts".to_string(), ".d.mts".to_string(), ".mjs".to_string()],
+                ),
+                (
+                    ".cjs".to_string(),
+                    vec![".cts".to_string(), ".d.cts".to_string(), ".cjs".to_string()],
+                ),
+            ],
             extensions: [
                 ".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".mjs", ".cjs", ".json", ".node",
             ]
