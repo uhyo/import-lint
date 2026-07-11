@@ -11,6 +11,7 @@ use import_lint::diagnostics::line_col;
 use import_lint::{LintConfig, ModuleGraph, Provenance, Severity, check_graph};
 
 use crate::output::{OutputSeverity, RenderedDiagnostic};
+use crate::timing;
 
 /// Flags that affect what gets reported, orthogonal to the rule engine itself.
 #[derive(Debug, Clone, Copy, Default)]
@@ -51,7 +52,9 @@ pub fn build_report(
             Severity::Warn => OutputSeverity::Warn,
             Severity::Off => unreachable!("checked above"),
         };
-        let core_diagnostics = check_graph(module_graph, &config.rules.jsdoc.options, project_root);
+        let core_diagnostics = timing::phase("check_graph", || {
+            check_graph(module_graph, &config.rules.jsdoc.options, project_root)
+        });
         for diagnostic in &core_diagnostics {
             let source = read_cached(&mut source_cache, &diagnostic.path);
             let (line, column) = line_col(source, diagnostic.span.start);

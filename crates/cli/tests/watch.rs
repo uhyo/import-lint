@@ -283,3 +283,63 @@ fn poll_watcher_smoke_test_detects_a_real_content_edit() {
     assert_eq!(diagnostic_count, 0, "expected the violation to clear");
     assert!(!has_error);
 }
+
+/// Watch single-edit cycle timing at 10k files (PLAN.md §8 perf target: < 100ms).
+/// Ignored by default — generating a 10k-file synthetic tree and running the
+/// initial full pipeline pass over it takes real time, and this is a perf
+/// assertion rather than a correctness test. Run explicitly, in release mode (the
+/// debug-build pipeline is far slower than 100ms even for a trivial cycle):
+///
+/// ```sh
+/// cargo test --release -p import_lint_cli --test watch -- --ignored watch_cycle_timing_10k --nocapture
+/// ```
+#[test]
+#[ignore]
+fn watch_cycle_timing_10k() {
+    let dir = TempDir::new().unwrap();
+    let generated = gen_fixture::generate(
+        dir.path(),
+        &gen_fixture::GenOptions {
+            files: 10_000,
+            seed: 42,
+        },
+    )
+    .expect("fixture generation should succeed");
+    eprintln!(
+        "generated {} files ({} content, {} barrels, {} ambient)",
+        generated.total_files(),
+        generated.content_files,
+        generated.barrel_files,
+        generated.ambient_files,
+    );
+
+    // The initial full run (walk + extract + link + check every file) happens in
+    // `WatchSession::new` and isn't timed here — only the single-file incremental
+    // edit cycle below is (that's the perf target this test asserts).
+    let mut session = WatchSession::new(session_options(dir.path())).expect("session builds");
+
+    let targets = import_lint_cli::walk(&[dir.path().to_path_buf()]);
+    let target = targets
+        .into_iter()
+        .find(|path| {
+            let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+            name != "index.ts" && !name.ends_with(".d.ts")
+        })
+        .expect("gen-fixture should have produced at least one content file");
+
+    let mut contents = fs::read_to_string(&target).unwrap();
+    contents.push_str("\nexport const _watchTimingEdit = 1;\n");
+    fs::write(&target, contents).unwrap();
+
+    let outcome = session.run_cycle(&[ChangeKind::ContentEdit(target)]);
+
+    eprintln!(
+        "watch cycle: {:?} ({} files rechecked, {} re-extracted)",
+        outcome.duration, outcome.rechecked_files, outcome.extracted_files
+    );
+    assert!(
+        outcome.duration < Duration::from_millis(100),
+        "watch cycle took {:?}, expected < 100ms (PLAN.md §8)",
+        outcome.duration
+    );
+}

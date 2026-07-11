@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/core", "crates/cli"]
+members = ["crates/core", "crates/cli", "crates/gen-fixture"]
 
 [workspace.package]
 edition = "2024"
@@ -38,3 +38,6 @@ tempfile = "3.14"
 # notify major bump can change the event/watcher API shape.
 notify = "=8.2.0"
 notify-debouncer-full = { version = "=0.7.0", default-features = false }
+# Benchmarking only (M7, PLAN.md §8): `criterion` is a dev-dependency of `core`'s
+# `benches/extract.rs`, never a runtime dependency of any shipped crate.
+criterion = "0.5"

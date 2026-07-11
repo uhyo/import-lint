@@ -7,6 +7,7 @@ pub mod report;
 pub mod runner;
 pub mod setup;
 pub mod source_type;
+mod timing;
 pub mod walk;
 pub mod watch;
 

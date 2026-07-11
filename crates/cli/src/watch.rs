@@ -353,24 +353,30 @@ impl WatchSession {
             &self.pool,
             &mut self.extraction_cache,
         );
-        let rechecked_files = outcome
-            .graph
-            .lint_targets
-            .iter()
-            .filter(|path| outcome.graph.file(path).is_some())
-            .count();
+        let rechecked_files = crate::timing::phase("rechecked_files_count", || {
+            outcome
+                .graph
+                .lint_targets
+                .iter()
+                .filter(|path| outcome.graph.file(path).is_some())
+                .count()
+        });
         let extracted_files = outcome.extracted_files;
-        let linted_files: Vec<PathBuf> = outcome.graph.lint_targets.iter().cloned().collect();
+        let linted_files: Vec<PathBuf> = crate::timing::phase("linted_files_clone", || {
+            outcome.graph.lint_targets.iter().cloned().collect()
+        });
 
-        let report = build_report(
-            &outcome.graph,
-            &self.config,
-            &self.project_root,
-            &ReportOptions {
-                report_unresolved: self.report_unresolved,
-                quiet: self.quiet,
-            },
-        );
+        let report = crate::timing::phase("build_report_total", || {
+            build_report(
+                &outcome.graph,
+                &self.config,
+                &self.project_root,
+                &ReportOptions {
+                    report_unresolved: self.report_unresolved,
+                    quiet: self.quiet,
+                },
+            )
+        });
         self.last_diagnostics = report.diagnostics;
         self.last_has_error = report.has_error;
 

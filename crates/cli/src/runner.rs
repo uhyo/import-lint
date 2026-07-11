@@ -22,6 +22,7 @@ use oxc_str::CompactStr;
 use rayon::prelude::*;
 
 use crate::source_type::source_type_for_path;
+use crate::timing;
 
 /// Options for one pipeline run.
 #[derive(Debug, Clone, Default)]
@@ -108,11 +109,13 @@ pub fn run(options: &RunnerOptions) -> ModuleGraph {
 /// filesystem layout may have changed (file added/removed/renamed, `package.json`,
 /// config, or tsconfig edited).
 pub(crate) fn run_with_cache(options: &RunnerOptions, cache: &mut ExtractionCache) -> RunOutcome {
-    let lint_target_paths = crate::walk::walk_with_excludes(
-        &options.roots,
-        Some(options.project_root.as_path()),
-        &options.exclude,
-    );
+    let lint_target_paths = timing::phase("walk", || {
+        crate::walk::walk_with_excludes(
+            &options.roots,
+            Some(options.project_root.as_path()),
+            &options.exclude,
+        )
+    });
 
     let pool = AllocatorPool::new(rayon::current_num_threads());
     let initial = extract_with_cache(&lint_target_paths, &pool, cache);
@@ -181,12 +184,19 @@ pub(crate) fn extract_and_link_from(
     let mut extracted_files = initial.extracted_files;
 
     let mut pending = initial.files;
-    for file in &pending {
-        files.insert(file.path.clone(), file.clone());
-    }
+    timing::phase(&format!("files_index({} files)", pending.len()), || {
+        for file in &pending {
+            files.insert(file.path.clone(), file.clone());
+        }
+    });
 
     loop {
-        resolutions.extend(resolve_pairs(&pending, resolver));
+        let round = timing::phase(&format!("resolve({} files)", pending.len()), || {
+            resolve_pairs(&pending, resolver)
+        });
+        timing::phase(&format!("resolutions_merge({} pairs)", round.len()), || {
+            resolutions.extend(round);
+        });
 
         let mut new_targets: Vec<PathBuf> = resolutions
             .values()
@@ -211,8 +221,11 @@ pub(crate) fn extract_and_link_from(
         }
     }
 
+    let graph = timing::phase("graph_build", || {
+        ModuleGraph::build(files.into_values().collect(), resolutions, lint_targets)
+    });
     RunOutcome {
-        graph: ModuleGraph::build(files.into_values().collect(), resolutions, lint_targets),
+        graph,
         extracted_files,
     }
 }
@@ -233,34 +246,38 @@ pub(crate) fn extract_with_cache(
     let mut files: Vec<Arc<FileModuleInfo>> = Vec::with_capacity(paths.len());
     let mut miss_paths: Vec<PathBuf> = Vec::new();
 
-    for path in paths {
-        match stat(path) {
-            Some((mtime, size)) => {
-                let cache_hit = cache
-                    .get(path)
-                    .is_some_and(|cached| cached.mtime == mtime && cached.size == size);
-                if cache_hit {
-                    // `cache_hit` guarantees `cache.get(path)` is `Some`.
-                    files.push(cache.get(path).unwrap().info.clone());
-                    continue;
+    timing::phase(&format!("stat({} paths)", paths.len()), || {
+        for path in paths {
+            match stat(path) {
+                Some((mtime, size)) => {
+                    let cache_hit = cache
+                        .get(path)
+                        .is_some_and(|cached| cached.mtime == mtime && cached.size == size);
+                    if cache_hit {
+                        // `cache_hit` guarantees `cache.get(path)` is `Some`.
+                        files.push(cache.get(path).unwrap().info.clone());
+                        continue;
+                    }
+                    miss_paths.push(path.clone());
                 }
-                miss_paths.push(path.clone());
-            }
-            None => {
-                // Can't stat: vanished between walking and extracting, a permission
-                // error, or (in principle) a platform without `mtime` support.
-                // Always treat as a miss — `extract_one`'s own read-error path
-                // reports/skips it — and drop any stale entry so a later
-                // re-appearance of the file at this path is picked up fresh rather
-                // than silently reusing old content.
-                cache.remove(path);
-                miss_paths.push(path.clone());
+                None => {
+                    // Can't stat: vanished between walking and extracting, a permission
+                    // error, or (in principle) a platform without `mtime` support.
+                    // Always treat as a miss — `extract_one`'s own read-error path
+                    // reports/skips it — and drop any stale entry so a later
+                    // re-appearance of the file at this path is picked up fresh rather
+                    // than silently reusing old content.
+                    cache.remove(path);
+                    miss_paths.push(path.clone());
+                }
             }
         }
-    }
+    });
 
     let extracted_files = miss_paths.len();
-    let newly_extracted = extract_files(&miss_paths, pool);
+    let newly_extracted = timing::phase(&format!("parse({extracted_files} files)"), || {
+        extract_files(&miss_paths, pool)
+    });
     for info in newly_extracted {
         let arc = Arc::new(info);
         if let Some((mtime, size)) = stat(&arc.path) {

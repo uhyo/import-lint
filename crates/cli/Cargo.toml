@@ -30,4 +30,7 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 
 [dev-dependencies]
+# Dev-only, for the M7 watch-cycle timing test (`tests/watch.rs`): generates a
+# synthetic 10k-file tree via the library function, not the binary.
+gen-fixture = { path = "../gen-fixture" }
 tempfile = { workspace = true }

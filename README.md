@@ -239,6 +239,25 @@ rule, intended as a drop-in replacement:
   followed for the check, but `import * as ns` namespace access, dynamic
   `import()`, `import x = require()`, and CommonJS `require()` are not checked.
 
+## Performance
+
+Measured on a 16-core AMD Ryzen 7 PRO 6850U laptop running **WSL2** (treat as
+directional, not absolute — see `docs/benchmarks.md` for the full methodology,
+machine details, and reproduction commands):
+
+- **Cold lint: ~157 ms for 5,000 files, ~323 ms for 10,000 files** — well
+  under the `docs/PLAN.md` §8 targets of 2 s / 4 s.
+- **~155x faster than the reference `eslint-plugin-import-access`** on the
+  same 5,000-file tree (157 ms vs. 24.4 s), reflecting that ImportLint parses
+  once with oxc rather than running full TypeScript-type-aware ESLint.
+- Watch-mode single-edit cycles at 10,000 files currently run **~155-220 ms**,
+  short of the < 100 ms target — a known, documented gap (full re-check every
+  cycle by design, per `crates/cli/src/watch.rs`'s M6 brief), not a regression;
+  see `docs/benchmarks.md` for the phase-by-phase breakdown and follow-up plan.
+
+Reproduce with `scripts/bench.sh` (add `--compare-eslint` for the ESLint
+comparison) and `cargo bench -p import_lint --bench extract`.
+
 ## Roadmap
 
 - Prebuilt binaries and a crates.io release.
