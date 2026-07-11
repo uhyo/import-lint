@@ -1,5 +1,5 @@
 //! Project setup: turning CLI flags + config-file discovery into a `LintConfig`,
-//! project root, roots to walk, `tsconfig` path, and self-reference mode (PLAN.md
+//! project root, roots to walk, `tsconfig` path, and self-reference mode (PLAN-v1.md
 //! §5, D7). Factored out of `main.rs`'s `lint()` (M5) so watch mode's `ConfigChanged`
 //! reload path (`crates/cli/src/watch.rs`, M6 brief D-W1) can redo exactly the same
 //! computation without duplicating it.

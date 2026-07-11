@@ -1,4 +1,4 @@
-//! File discovery (PLAN.md §2.1 step 2, M2): the `ignore` crate's parallel walker,
+//! File discovery (PLAN-v1.md §2.1 step 2, M2): the `ignore` crate's parallel walker,
 //! rooted at the configured include paths.
 
 use std::path::{Path, PathBuf};
@@ -28,7 +28,7 @@ pub fn walk(roots: &[PathBuf]) -> Vec<PathBuf> {
 /// of `.gitignore`, rooted at `project_root` (falls back to the first existing root
 /// when `project_root` is `None`, matching `walk`'s no-config behavior). Each
 /// pattern is added as a gitignore-style ignore glob (`OverrideBuilder`'s `!pattern`
-/// = exclude matching paths — PLAN.md M5 brief).
+/// = exclude matching paths — PLAN-v1.md M5 brief).
 ///
 /// Returned paths are canonicalized (absolute, symlinks resolved) and returned sorted
 /// with duplicates removed, so the pipeline's output is deterministic across runs and

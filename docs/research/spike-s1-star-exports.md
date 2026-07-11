@@ -176,7 +176,7 @@ star-exported sibling from `inner.ts` would have been enforced. This means: **a
 name resolves via a star export only if no explicit local declaration or named
 (re-)export of that name exists in the same file** — i.e. `lookup()` should check
 the local export table (including named re-exports) before falling through to
-`star_exports` descent, exactly as already specified in PLAN.md §2.3.
+`star_exports` descent, exactly as already specified in PLAN-v1.md §2.3.
 
 ## Q5 — `export * as ns from "./inner"`
 
@@ -222,7 +222,7 @@ plain `export * from`, because `export * as ns` introduces an actual named
 declaration/symbol in `barrel.ts`), and the reported identifier is the namespace
 name (`ns`), not any name inside the namespace.
 
-## Summary for `lookup()` (PLAN.md §2.3)
+## Summary for `lookup()` (PLAN-v1.md §2.3)
 
 ```
 lookup(target_file, name):

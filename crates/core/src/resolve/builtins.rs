@@ -1,4 +1,4 @@
-//! Node builtin-module check (PLAN.md D5).
+//! Node builtin-module check (PLAN-v1.md D5).
 //!
 //! Must run *before* invoking `oxc_resolver`: `resolve_dts()` has no builtin-module
 //! short-circuit of its own — that's only wired into the plain (non-dts) `resolve()`

@@ -1,4 +1,4 @@
-//! Opt-in per-phase timing instrumentation (PLAN.md §8, M7): set
+//! Opt-in per-phase timing instrumentation (PLAN-v1.md §8, M7): set
 //! `IMPORT_LINT_TIMING=1` (any non-empty value) to print a `phase: Xms` line to
 //! stderr for each instrumented phase of the pipeline/watch cycle. Zero cost when
 //! unset beyond one `OnceLock` check per call — cheap enough to leave permanently

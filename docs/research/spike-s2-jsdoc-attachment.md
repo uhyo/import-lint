@@ -1,6 +1,6 @@
 # Spike S2 — JSDoc attachment coverage in oxc
 
-> De-risks [PLAN.md §10 spike S2](../PLAN.md) and the extraction detail in §2.2. Verified
+> De-risks [PLAN-v1.md §10 spike S2](../PLAN-v1.md) and the extraction detail in §2.2. Verified
 > empirically with a scratch `cargo` project against the pinned crate versions from
 > [`oxc-ecosystem.md`](./oxc-ecosystem.md), 2026-07-10.
 
@@ -120,7 +120,7 @@ check first). So:
   `TSInterfaceDeclaration`, etc., even though several of *those* kinds are separately in the
   allowlist (they only match when *not* wrapped in an export, i.e. a plain unexported
   `function f() {}`).
-- This confirms PLAN.md §2.2 is already stating the right target: "JSDoc association ... on the
+- This confirms PLAN-v1.md §2.2 is already stating the right target: "JSDoc association ... on the
   *statement* node that introduces each export (declaration statement, `ExportNamedDeclaration`,
   or `export default`)" — the extraction code should always look up JSDoc via the outermost
   `ModuleDeclaration`/`Declaration` node it is visiting for a given exported entity, not a nested

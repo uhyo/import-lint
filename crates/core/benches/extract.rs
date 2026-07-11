@@ -1,6 +1,6 @@
-//! Criterion micro-benchmark for [`import_lint::extract_file`] (PLAN.md §8, M7):
+//! Criterion micro-benchmark for [`import_lint::extract_file`] (PLAN-v1.md §8, M7):
 //! parse+extract cost dominates the pipeline's per-file work (link and check are
-//! cheap by comparison, PLAN.md §8), so this is the benchmark to watch for
+//! cheap by comparison, PLAN-v1.md §8), so this is the benchmark to watch for
 //! extraction regressions independent of I/O/discovery/resolution noise.
 //!
 //! `REPRESENTATIVE_SOURCE` is a hand-written ~150-line `.ts` file mixing every

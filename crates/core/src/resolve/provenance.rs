@@ -1,5 +1,5 @@
 //! Classify an `oxc_resolver` result as internal project source, external, or
-//! unresolved (PLAN.md D5, D8, §2.3). See docs/research/spike-s3-resolver-provenance.md
+//! unresolved (PLAN-v1.md D5, D8, §2.3). See docs/research/spike-s3-resolver-provenance.md
 //! for the evidence behind this exact classification.
 
 use std::path::PathBuf;

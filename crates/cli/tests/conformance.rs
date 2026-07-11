@@ -1,4 +1,4 @@
-//! Conformance suite (docs/PLAN.md §9.1, M3 exit criterion): lint
+//! Conformance suite (docs/PLAN-v1.md §9.1, M3 exit criterion): lint
 //! `tests/conformance/fixtures/project/src` with ImportLint under each option set
 //! captured in `tests/conformance/expected/manifest.json`, and diff the resulting
 //! diagnostics against that option set's `expected/<name>.json` snapshot — the

@@ -1,6 +1,6 @@
 # Conformance suite
 
-This directory is the oracle for ImportLint's core semantics (docs/PLAN.md §9.1).
+This directory is the oracle for ImportLint's core semantics (docs/PLAN-v1.md §9.1).
 It removes ambiguity about "does the reference plugin flag this?" by generating
 the reference's own answer, rather than by re-deriving it from the spec doc.
 
@@ -132,7 +132,7 @@ script only reproduces it correctly because it lints the reference repo's
 Consequence for the Rust side: `fixtures/packages/{third-party,workspaces}/*`
 in this directory are the **source** package directories only. Resolver
 integration tests that need the third-party/workspace-symlink resolution
-behavior (docs/PLAN.md §9.3, spike S3) must construct their own
+behavior (docs/PLAN-v1.md §9.3, spike S3) must construct their own
 `node_modules/@fixture-package-{third-party,workspace}/*` layout next to
 `fixtures/project/` — real copies for `third-party/*`, symlinks for
 `workspaces/*` — rather than assuming one is checked in here. None of the 12

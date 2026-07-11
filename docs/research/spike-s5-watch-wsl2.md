@@ -96,13 +96,13 @@ The atomic-save pattern (write to `.filename.tmp`, rename over `filename`) is cr
 - The rename over the original is **silent** in the event stream
 - Net result: inotify reports the file as newly created/modified, which is fine for the watcher
 
-This means the watcher does not distinguish between "edit via atomic save" and "edit via direct write" at the event level. For ImportLint's watch mode (§7, PLAN.md), this is acceptable because:
+This means the watcher does not distinguish between "edit via atomic save" and "edit via direct write" at the event level. For ImportLint's watch mode (§7, PLAN-v1.md), this is acceptable because:
 - We re-extract the file and diff its export surface regardless of how it changed
 - The file's content is what matters, not the edit mechanism
 
 ## Mapping Event Kinds to ImportLint Watch Categories
 
-ImportLint's watch phase (PLAN.md §7) needs to categorize events into:
+ImportLint's watch phase (PLAN-v1.md §7) needs to categorize events into:
 - **Changed** (file content modified)
 - **Added** (new file)
 - **Deleted** (file removed)

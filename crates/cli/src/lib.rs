@@ -1,6 +1,6 @@
 //! Library surface for the `import-lint` CLI, split out from the binary
 //! (`src/main.rs`) so integration tests can drive discovery and the pipeline
-//! directly without spawning a subprocess (PLAN.md M2).
+//! directly without spawning a subprocess (PLAN-v1.md M2).
 
 pub mod output;
 pub mod report;

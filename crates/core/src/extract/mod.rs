@@ -1,4 +1,4 @@
-//! Parse one file into an owned [`FileModuleInfo`] (PLAN.md §2.2, §3, M1).
+//! Parse one file into an owned [`FileModuleInfo`] (PLAN-v1.md §2.2, §3, M1).
 //!
 //! This is the only module that touches oxc AST/arena lifetimes: [`extract`] parses,
 //! runs semantic analysis (needed for JSDoc lookup), walks the resulting `Program`

@@ -1,5 +1,5 @@
 //! `gen-fixture <out-dir> --files N [--seed S]`: generates a deterministic synthetic
-//! TypeScript project at `<out-dir>` for `import-lint`'s benchmarks (PLAN.md §8, M7).
+//! TypeScript project at `<out-dir>` for `import-lint`'s benchmarks (PLAN-v1.md §8, M7).
 //! See `crates/gen-fixture/src/lib.rs` for the shape it produces. Hand-rolled arg
 //! parsing (no `clap`): this crate is intentionally dependency-free.
 

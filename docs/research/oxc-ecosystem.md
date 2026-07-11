@@ -1,6 +1,6 @@
 # Research: oxc Ecosystem for a Rust TS/JS Import-Graph Linter
 
-> Research appendix for [PLAN.md](../PLAN.md). Findings verified against crates.io, docs.rs,
+> Research appendix for [PLAN-v1.md](../PLAN-v1.md). Findings verified against crates.io, docs.rs,
 > and the `oxc-project/oxc` / `oxc-project/oxc-resolver` GitHub sources as of 2026-07-10.
 
 ## 1. oxc crates — versions, MSRV, stability

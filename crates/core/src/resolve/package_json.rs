@@ -27,7 +27,7 @@ pub(super) struct PackageJsonEntry {
 
 /// Caches, per starting directory, the result of walking up to the nearest named
 /// `package.json` (or the absence of one). Thread-safe behind `&self` so a single
-/// `ProjectResolver` can be shared across worker threads (PLAN.md §8).
+/// `ProjectResolver` can be shared across worker threads (PLAN-v1.md §8).
 #[derive(Default)]
 pub(super) struct PackageJsonCache {
     by_dir: RwLock<HashMap<PathBuf, Option<PackageJsonEntry>>>,

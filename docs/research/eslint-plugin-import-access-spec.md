@@ -1,6 +1,6 @@
 # Behavioral Specification: `eslint-plugin-import-access` v3.1.0
 
-> Research appendix for [PLAN.md](../PLAN.md). Produced by analyzing the implementation and
+> Research appendix for [PLAN-v1.md](../PLAN-v1.md). Produced by analyzing the implementation and
 > test suite at `~/repos/eslint-plugin-import-access` (not just the docs). This is the
 > reference behavior that ImportLint must replicate.
 

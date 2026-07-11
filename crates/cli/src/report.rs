@@ -1,5 +1,5 @@
 //! Turning a checked [`ModuleGraph`] into the [`RenderedDiagnostic`]s a formatter
-//! renders (PLAN.md §2.1 step 5–6, §5 `--report-unresolved`/`--quiet`). Factored out
+//! renders (PLAN-v1.md §2.1 step 5–6, §5 `--report-unresolved`/`--quiet`). Factored out
 //! of `main.rs`'s `lint()` (M5) so watch mode (`crates/cli/src/watch.rs`, M6) can
 //! rebuild the same report every cycle without duplicating the logic.
 
@@ -94,7 +94,7 @@ pub fn finish_report(
 /// variable — so grouping by `diagnostic.file`/`diagnostic.path` is exact: nothing
 /// about a file `f`'s entry here depends on any *other* lint target's own
 /// diagnostics. This is what makes watch mode's incremental fast path
-/// (`crates/cli/src/watch.rs`, PLAN.md §7) correct: recomputing just the dirty subset
+/// (`crates/cli/src/watch.rs`, PLAN-v1.md §7) correct: recomputing just the dirty subset
 /// and merging into a persistent map gives the same result as recomputing everything.
 pub fn diagnostics_by_file(
     module_graph: &ModuleGraph,

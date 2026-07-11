@@ -1,4 +1,4 @@
-//! Watch mode (PLAN.md §7, M6 brief). [`WatchSession`] implements the update policy
+//! Watch mode (PLAN-v1.md §7, M6 brief). [`WatchSession`] implements the update policy
 //! (brief D-W1: full re-check every debounced batch, extraction cached; a fresh
 //! `ProjectResolver` + re-walk only on a "structural" change) and is fully drivable
 //! without `notify` (brief D-W3) — see `crates/cli/tests/watch.rs`. [`watch_loop`] is
@@ -130,7 +130,7 @@ pub struct WatchSession {
 
     /// The current module graph, kept alive across cycles (not rebuilt from scratch
     /// each time) so a content-edit-only cycle can patch it in place instead of
-    /// re-deriving it from the whole project (PLAN.md §7 incremental design).
+    /// re-deriving it from the whole project (PLAN-v1.md §7 incremental design).
     /// Replaced wholesale by [`WatchSession::full_recheck`]; patched in place by
     /// [`WatchSession::run_fast_cycle`].
     graph: ModuleGraph,
@@ -281,7 +281,7 @@ impl WatchSession {
     }
 
     /// Advance the session by one debounced batch of `changes` (M6/M7 brief,
-    /// PLAN.md §7):
+    /// PLAN-v1.md §7):
     /// - `ConfigChanged`: reload the config; on success this also forces a full
     ///   reload (severity/options/include/exclude may have changed the walk itself);
     ///   on failure, keep the previous config and report the error via
@@ -432,7 +432,7 @@ impl WatchSession {
     }
 
     /// The fast path for a cycle whose changes are *all* `ContentEdit`s (M7,
-    /// PLAN.md §7's incremental design; `run_cycle` never calls this for a batch
+    /// PLAN-v1.md §7's incremental design; `run_cycle` never calls this for a batch
     /// containing a `Structural`/`ConfigChanged`/`TsconfigChanged`): re-extract just
     /// `changed_paths`, patch `self.graph` in place (no full-project `stat()` sweep,
     /// resolve pass, or graph rebuild), and recheck only the dirty subset.
@@ -591,7 +591,7 @@ impl WatchSession {
 }
 
 /// A changed file's export surface for [`WatchSession::run_fast_cycle`]'s
-/// span-insensitive diff (PLAN.md §7): exported name -> access, plus the
+/// span-insensitive diff (PLAN-v1.md §7): exported name -> access, plus the
 /// `star_exports` specifier list (order-sensitive — reordering two `export * from`
 /// statements can change which one wins a name collision, so any difference here
 /// counts as a surface change). Spans are deliberately excluded.
@@ -618,7 +618,7 @@ fn export_surface(info: &FileModuleInfo) -> ExportSurface {
 /// barrel that itself gets star-exported by another barrel). A bare `export *`
 /// statement is never itself a checked entry (there's no name to check against), so
 /// the barrel itself doesn't need rechecking — only files that resolve a *name*
-/// through it do (PLAN.md §7's dirty-set definition).
+/// through it do (PLAN-v1.md §7's dirty-set definition).
 fn propagate_star_closure(graph: &ModuleGraph, start: &Path, dirty: &mut HashSet<PathBuf>) {
     let mut visited_barrels: HashSet<PathBuf> = HashSet::new();
     let mut stack: Vec<PathBuf> = vec![start.to_path_buf()];

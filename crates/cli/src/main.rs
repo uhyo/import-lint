@@ -60,7 +60,7 @@ struct Cli {
     #[arg(long)]
     quiet: bool,
 
-    /// Watch mode: re-run whenever a watched file changes (PLAN.md §7). Uses the
+    /// Watch mode: re-run whenever a watched file changes (PLAN-v1.md §7). Uses the
     /// platform-recommended watcher (inotify on Linux).
     #[arg(long)]
     watch: bool,
@@ -110,7 +110,7 @@ fn main() -> ExitCode {
 }
 
 /// The default (no-subcommand) invocation: load config, run discovery + link +
-/// check, and render diagnostics in the requested format (PLAN.md §5–§6, M5).
+/// check, and render diagnostics in the requested format (PLAN-v1.md §5–§6, M5).
 fn lint(cli: Cli) -> ExitCode {
     let cwd = match std::env::current_dir() {
         Ok(dir) => dir,
@@ -188,7 +188,7 @@ fn lint(cli: Cli) -> ExitCode {
 /// The `--watch`/`--watch-poll` invocation: build a `WatchSession` (which performs
 /// the initial full run), render its current state, then hand off to `watch_loop`
 /// forever — real filesystem events drive `WatchSession::run_cycle` from here on
-/// (PLAN.md §7, M6). Exits 2 only on a startup failure (bad `--config`, watcher
+/// (PLAN-v1.md §7, M6). Exits 2 only on a startup failure (bad `--config`, watcher
 /// setup failure); otherwise watch mode runs until the process is killed (default
 /// SIGINT behavior — no handler needed, M6 brief D-W4).
 fn watch_command(cli: Cli) -> ExitCode {

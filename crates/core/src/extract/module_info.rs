@@ -2,7 +2,7 @@
 //!
 //! Everything here is `'static`-owned (`CompactStr`/`String`/`PathBuf`/`Span` are all
 //! `Copy` or independently heap-allocated) so a `FileModuleInfo` can outlive the oxc
-//! arena it was extracted from. See PLAN.md §2.2 for the design rationale.
+//! arena it was extracted from. See PLAN-v1.md §2.2 for the design rationale.
 
 use std::collections::HashMap;
 use std::path::PathBuf;

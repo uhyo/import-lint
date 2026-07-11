@@ -1,6 +1,6 @@
 # Spike S3: `oxc_resolver` provenance classification
 
-> Verifies (for [PLAN.md](../PLAN.md) D4, D5, D6, D8, §2.3, §10 spike S3) that `oxc_resolver`
+> Verifies (for [PLAN-v1.md](../PLAN-v1.md) D4, D5, D6, D8, §2.3, §10 spike S3) that `oxc_resolver`
 > exposes enough to classify a resolved specifier as Internal / External / Unresolved,
 > including the pnpm/npm-workspace symlink case that a naive real-path check gets wrong.
 

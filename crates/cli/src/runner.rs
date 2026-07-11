@@ -1,8 +1,8 @@
-//! Discovery + link orchestration (PLAN.md §2.1 steps 2–4, §8, M2): walk, then
+//! Discovery + link orchestration (PLAN-v1.md §2.1 steps 2–4, §8, M2): walk, then
 //! parse+extract and resolve in parallel (rayon + `AllocatorPool`), producing a
-//! [`ModuleGraph`]. The check phase (PLAN.md §2.1 step 5) is M3's job.
+//! [`ModuleGraph`]. The check phase (PLAN-v1.md §2.1 step 5) is M3's job.
 //!
-//! M6 (watch mode, `docs/PLAN.md` §7) needs these stages callable individually with a
+//! M6 (watch mode, `docs/PLAN-v1.md` §7) needs these stages callable individually with a
 //! caller-supplied [`ExtractionCache`], so a content-only file edit can skip
 //! re-parsing every untouched file while still rebuilding the graph from scratch each
 //! cycle (`crates/cli/src/watch.rs`'s `WatchSession`). [`run`] is the simple one-shot
@@ -27,7 +27,7 @@ use crate::timing;
 /// Options for one pipeline run.
 #[derive(Debug, Clone, Default)]
 pub struct RunnerOptions {
-    /// Roots to walk for lint targets (PLAN.md §2.1 step 2).
+    /// Roots to walk for lint targets (PLAN-v1.md §2.1 step 2).
     pub roots: Vec<PathBuf>,
     /// Project root passed to the resolver (tsconfig discovery base, `cwd` option).
     /// Default: the current working directory.
@@ -63,7 +63,7 @@ pub(crate) struct CachedExtraction {
     info: Arc<FileModuleInfo>,
 }
 
-/// Extraction cache keyed by absolute file path (M6, `docs/PLAN.md` §7, watch-mode
+/// Extraction cache keyed by absolute file path (M6, `docs/PLAN-v1.md` §7, watch-mode
 /// brief D-W1): reused across pipeline runs so watch mode's content-only edit cycles
 /// only re-parse the files that actually changed. `WatchSession` owns one and
 /// invalidates entries for files it's told changed (belt-and-braces on top of the
@@ -152,7 +152,7 @@ pub(crate) fn build_resolver_from_files(
     )
 }
 
-/// Extract+resolve `lint_target_paths` against `resolver` to a fixpoint (PLAN.md
+/// Extract+resolve `lint_target_paths` against `resolver` to a fixpoint (PLAN-v1.md
 /// §2.1 steps 3–4): any internal resolution target outside the walked set is
 /// extracted and resolved too, so the one-hop check (M3) can look up its export
 /// table. `initial` is the already-extracted walked set (from [`extract_with_cache`]
@@ -231,7 +231,7 @@ pub(crate) fn extract_and_link_from(
 }
 
 /// Extract every path in `paths`, serving already-extracted, unchanged files from
-/// `cache` and only actually parsing (rayon + `AllocatorPool`, PLAN.md §8) the ones
+/// `cache` and only actually parsing (rayon + `AllocatorPool`, PLAN-v1.md §8) the ones
 /// that are missing or whose `(mtime, size)` no longer matches the cached entry.
 /// Freshly extracted files are inserted into `cache` before returning.
 ///
@@ -305,7 +305,7 @@ fn stat(path: &Path) -> Option<(SystemTime, u64)> {
     Some((mtime, meta.len()))
 }
 
-/// Parse+extract `paths` in parallel (rayon + `AllocatorPool` arena reuse, PLAN.md
+/// Parse+extract `paths` in parallel (rayon + `AllocatorPool` arena reuse, PLAN-v1.md
 /// §8): one arena per worker, reset after each file, only the owned
 /// `FileModuleInfo` crosses the parallel boundary. A file that can't be read or
 /// fails to parse is skipped with a stderr warning rather than aborting the run.
@@ -362,7 +362,7 @@ fn extract_one(path: &Path, pool: &AllocatorPool) -> Option<FileModuleInfo> {
 }
 
 /// Resolve every distinct `(file, specifier)` pair reachable from `files` in
-/// parallel. `ProjectResolver::resolve` is thread-safe by design (PLAN.md §8): one
+/// parallel. `ProjectResolver::resolve` is thread-safe by design (PLAN-v1.md §8): one
 /// shared resolver, never a per-file one.
 fn resolve_pairs(
     files: &[Arc<FileModuleInfo>],

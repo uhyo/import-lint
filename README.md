@@ -254,12 +254,12 @@ directional, not absolute — see `docs/benchmarks.md` for the full methodology,
 machine details, and reproduction commands):
 
 - **Cold lint: ~157 ms for 5,000 files, ~323 ms for 10,000 files** — well
-  under the `docs/PLAN.md` §8 targets of 2 s / 4 s.
+  under the `docs/PLAN-v1.md` §8 targets of 2 s / 4 s.
 - **~155x faster than the reference `eslint-plugin-import-access`** on the
   same 5,000-file tree (157 ms vs. 24.4 s), reflecting that ImportLint parses
   once with oxc rather than running full TypeScript-type-aware ESLint.
 - **Watch-mode single-edit cycles at 10,000 files run ~5 ms**, well under the
-  < 100 ms target — an incremental fast path (PLAN.md §7) patches the module
+  < 100 ms target — an incremental fast path (PLAN-v1.md §7) patches the module
   graph and re-checks only the dirty subset instead of the whole project; see
   `docs/benchmarks.md` for the design and measurements.
 

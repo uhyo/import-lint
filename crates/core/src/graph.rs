@@ -1,9 +1,9 @@
-//! The whole-project module graph assembled after the link phase (PLAN.md §2.1 step
+//! The whole-project module graph assembled after the link phase (PLAN-v1.md §2.1 step
 //! 4, §2.2, M2).
 //!
 //! `build` is a pure, single-threaded assembly step: the CLI crate parallelizes
 //! extraction and resolution (rayon) and hands the results here once per run (or
-//! per watch re-link, PLAN.md §7) — no rayon in core.
+//! per watch re-link, PLAN-v1.md §7) — no rayon in core.
 
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -25,12 +25,12 @@ pub struct ModuleGraph {
     pub resolutions: HashMap<(PathBuf, CompactStr), Provenance>,
     /// Reverse index: target file -> files with *any* edge into it (import,
     /// default import, re-export, or star export specifier that resolved to it).
-    /// Watch mode's dirty-set computation (PLAN.md §7) starts here.
+    /// Watch mode's dirty-set computation (PLAN-v1.md §7) starts here.
     pub importers: HashMap<PathBuf, HashSet<PathBuf>>,
     /// Reverse index restricted to `export * from` edges: target file -> files
     /// that star-export it. A subset of `importers`, kept separate because watch
     /// mode needs to know specifically which files might need to re-descend a
-    /// star-export chain when a file's export surface changes (PLAN.md §7).
+    /// star-export chain when a file's export surface changes (PLAN-v1.md §7).
     pub star_importers: HashMap<PathBuf, HashSet<PathBuf>>,
     /// Files discovered by the walker (as opposed to files only present because
     /// they're a resolution target) — only these files' `checked_entries` get

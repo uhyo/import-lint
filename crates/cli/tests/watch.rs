@@ -1,4 +1,4 @@
-//! Watch mode tests (PLAN.md §7, M6). Two kinds:
+//! Watch mode tests (PLAN-v1.md §7, M6). Two kinds:
 //!
 //! - Session-level tests drive `WatchSession::run_cycle` with synthesized
 //!   `ChangeKind` batches directly — no `notify` involved (M6 brief D-W3), so these
@@ -213,7 +213,7 @@ fn content_edit_cycle_only_re_extracts_the_changed_file() {
     assert_eq!(outcome.extracted_files, 1);
 }
 
-/// Fast-path star-export closure (M7, PLAN.md §7 "locked design" step 5):
+/// Fast-path star-export closure (M7, PLAN-v1.md §7 "locked design" step 5):
 /// `other/user.ts` imports `value` from `src/barrel.ts`, which only offers it via a
 /// bare `export * from "./inner"` (no explicit re-export of its own, so `barrel.ts`
 /// itself is never a checked entry) — the one-hop lookup for `user.ts` has to
@@ -320,7 +320,7 @@ fn content_edit_of_inner_does_not_leak_through_an_explicit_passthrough_reexport(
 }
 
 /// A content edit that changes only a file's *own* imports (not its export surface)
-/// must not re-check anything but that one file (M7, PLAN.md §7's dirty-set
+/// must not re-check anything but that one file (M7, PLAN-v1.md §7's dirty-set
 /// definition): `b.ts` gains an import of `a.ts` but its own exported `b` stays
 /// untouched, so nothing that imports `b.ts` needs rechecking — there is nothing
 /// importing `b.ts` here, but the assertion that matters is `rechecked_files == 1`,
@@ -344,7 +344,7 @@ fn content_edit_changing_only_its_own_imports_rechecks_only_itself() {
     assert!(outcome.diagnostics.is_empty());
 }
 
-/// The fast path's own documented escape hatch (M7, PLAN.md §7's "locked design"
+/// The fast path's own documented escape hatch (M7, PLAN-v1.md §7's "locked design"
 /// step 4): a content edit adds an import to a file that was never walked (it lives
 /// outside the watched root, `src/`, so it was never part of the initial graph) —
 /// the fast path can't reach a fixpoint for a brand-new graph node on its own and
@@ -384,7 +384,7 @@ fn content_edit_referencing_a_never_walked_file_falls_back_without_panicking() {
     );
 }
 
-/// Span-insensitive surface comparison (M7, PLAN.md §7): moving `util.ts`'s JSDoc
+/// Span-insensitive surface comparison (M7, PLAN-v1.md §7): moving `util.ts`'s JSDoc
 /// comment down a line (inserting a leading blank line) shifts every span in the
 /// file without changing which access level applies to `helper`. That must not
 /// count as an export-surface change, so `consumer.ts` (which imports `helper` and
@@ -437,7 +437,7 @@ fn new_returns_an_error_for_a_missing_explicit_config_instead_of_starting() {
 
 /// The one real-watcher test (M6 brief §Tests item 2): drive `watch_loop` with a
 /// real `PollWatcher` (used instead of the platform-recommended inotify watcher for
-/// determinism in CI, per `docs/PLAN.md` §9.4) against an actual file edit, and
+/// determinism in CI, per `docs/PLAN-v1.md` §9.4) against an actual file edit, and
 /// assert a `CycleOutcome` reflecting that edit arrives within a generous timeout.
 /// This is the only thing in this file that isn't pure/deterministic by
 /// construction, so it gets the long timeout and the most headroom.
@@ -485,7 +485,7 @@ fn poll_watcher_smoke_test_detects_a_real_content_edit() {
     assert!(!has_error);
 }
 
-/// Watch single-edit cycle timing at 10k files (PLAN.md §8 perf target: < 100ms).
+/// Watch single-edit cycle timing at 10k files (PLAN-v1.md §8 perf target: < 100ms).
 /// Ignored by default — generating a 10k-file synthetic tree and running the
 /// initial full pipeline pass over it takes real time, and this is a perf
 /// assertion rather than a correctness test. Run explicitly, in release mode (the
@@ -540,7 +540,7 @@ fn watch_cycle_timing_10k() {
     );
     assert!(
         outcome.duration < Duration::from_millis(100),
-        "watch cycle took {:?}, expected < 100ms (PLAN.md §8)",
+        "watch cycle took {:?}, expected < 100ms (PLAN-v1.md §8)",
         outcome.duration
     );
 }

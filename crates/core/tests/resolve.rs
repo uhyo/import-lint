@@ -1,4 +1,4 @@
-//! Resolver integration tests (PLAN.md §9.3, M2). Each test builds a small fixture
+//! Resolver integration tests (PLAN-v1.md §9.3, M2). Each test builds a small fixture
 //! tree in a tempdir — no dependency on `tests/conformance`'s `node_modules` being
 //! installed.
 

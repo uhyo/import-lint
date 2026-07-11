@@ -1,4 +1,4 @@
-//! Deterministic synthetic TypeScript project generator (PLAN.md §8, M7): produces a
+//! Deterministic synthetic TypeScript project generator (PLAN-v1.md §8, M7): produces a
 //! realistic-shaped tree for `import-lint`'s end-to-end benchmarks (`scripts/bench.sh`)
 //! and the watch-mode timing test (`crates/cli/tests/watch.rs`).
 //!
@@ -388,7 +388,7 @@ fn write_imports(
         // they're biased toward untagged exports — with only an
         // `VIOLATION_CHANCE` probability of deliberately reaching for a
         // `@package`/`@private` one — to land "a few percent" of all imports as
-        // real diagnostics (PLAN.md §8) rather than the ~20% a uniform pick would
+        // real diagnostics (PLAN-v1.md §8) rather than the ~20% a uniform pick would
         // produce (roughly 30% of all exports carry a tag).
         const VIOLATION_CHANCE: f64 = 0.08;
 

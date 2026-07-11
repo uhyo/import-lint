@@ -1,8 +1,8 @@
-//! Resolve every `(importer, specifier)` pair to a [`Provenance`] (PLAN.md §2.3, M2).
+//! Resolve every `(importer, specifier)` pair to a [`Provenance`] (PLAN-v1.md §2.3, M2).
 //!
 //! This is the link phase's entry point: a single shared [`ProjectResolver`] wraps
 //! one `oxc_resolver::Resolver` (its own dashmap-backed cache makes repeated
-//! `node_modules`/tsconfig lookups cheap — never construct per-file resolvers, PLAN.md
+//! `node_modules`/tsconfig lookups cheap — never construct per-file resolvers, PLAN-v1.md
 //! §8), the ambient-module registry built from every extracted file's
 //! `FileModuleInfo::ambient_modules` (D6), and a small self-reference package.json
 //! cache. `resolve()` is `&self` and safe to call concurrently from rayon workers in
@@ -37,7 +37,7 @@ pub enum SelfReferenceMode {
     Internal,
 }
 
-/// Wraps the shared `oxc_resolver::Resolver` plus the extra state PLAN.md §2.3's
+/// Wraps the shared `oxc_resolver::Resolver` plus the extra state PLAN-v1.md §2.3's
 /// `resolve()` pseudocode needs beyond plain module resolution: the ambient-module
 /// registry and the self-reference package.json cache.
 pub struct ProjectResolver {

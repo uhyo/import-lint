@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# End-to-end benchmark for import-lint (PLAN.md §8, M7).
+# End-to-end benchmark for import-lint (PLAN-v1.md §8, M7).
 #
 # Usage:
 #   scripts/bench.sh [--compare-eslint] [--seed N] [--files-5k N] [--files-10k N]

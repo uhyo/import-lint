@@ -1,4 +1,4 @@
-//! End-to-end CLI tests (PLAN.md §5–§6, M5): spawn the real `import-lint` binary
+//! End-to-end CLI tests (PLAN-v1.md §5–§6, M5): spawn the real `import-lint` binary
 //! (`env!("CARGO_BIN_EXE_import-lint")`) against a fresh `TempDir` fixture per test
 //! and assert on its exit code, stdout, and stderr — the parts of the M5 brief that
 //! only exist at the binary boundary (config discovery, flag precedence, output

@@ -1,5 +1,5 @@
 //! Integration tests for discovery (`import_lint_cli::walk`) and the discovery+link
-//! pipeline (`import_lint_cli::runner::run`), driving the library directly (PLAN.md
+//! pipeline (`import_lint_cli::runner::run`), driving the library directly (PLAN-v1.md
 //! M2) rather than spawning the binary — these need programmatic access to the
 //! resulting `Vec<PathBuf>` / `ModuleGraph`, not just CLI output.
 

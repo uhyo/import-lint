@@ -1,4 +1,4 @@
-//! Output formats for rendered diagnostics (PLAN.md §6, M5): `pretty` (default,
+//! Output formats for rendered diagnostics (PLAN-v1.md §6, M5): `pretty` (default,
 //! ESLint-stylish-like), `json` (ESLint-compatible), `github` (workflow commands).
 //!
 //! Core's [`import_lint::Diagnostic`] carries no severity or rule id (both are a
@@ -43,7 +43,7 @@ pub struct RenderedDiagnostic {
     pub message_id: String,
 }
 
-/// The output format selected by `--format` (PLAN.md §6, M5). Lives here (rather
+/// The output format selected by `--format` (PLAN-v1.md §6, M5). Lives here (rather
 /// than as a `main.rs`-local `clap` enum) so watch mode (`crates/cli/src/watch.rs`,
 /// M6) can render each cycle through the same [`OutputFormat::render`] dispatcher
 /// `main.rs`'s one-shot `lint()` uses.

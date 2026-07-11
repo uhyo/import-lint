@@ -32,7 +32,7 @@ pub fn check_graph(
 }
 
 /// Same as [`check_graph`], but scoped to `files` instead of every lint target in
-/// `graph`. Watch mode's incremental fast path (`crates/cli/src/watch.rs`, PLAN.md
+/// `graph`. Watch mode's incremental fast path (`crates/cli/src/watch.rs`, PLAN-v1.md
 /// §7) calls this with just the dirty set — the changed files plus, if their export
 /// surface changed, their importers and star-export closure — so a single-file edit
 /// doesn't re-check the whole project. Each file's diagnostics depend only on its own

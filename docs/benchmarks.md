@@ -1,6 +1,6 @@
 # Benchmarks (M7)
 
-Performance targets, per `docs/PLAN.md` §8:
+Performance targets, per `docs/PLAN-v1.md` §8:
 
 - Cold lint of 5,000 files in **< 2 s**, 10,000 files in **< 4 s**.
 - Watch-mode incremental cycle **< 100 ms** for a single-file edit in a 10k-file
@@ -131,7 +131,7 @@ extract/representative_file
 **~47 µs per representative file.** At that rate, extraction alone accounts
 for well under 1 second even for 10,000 files if it were fully serial
 (10,000 × 47 µs ≈ 0.47 s) — in practice it's rayon-parallelized across cores
-(PLAN.md §8), so the cold-lint numbers above spend most of their wall time
+(PLAN-v1.md §8), so the cold-lint numbers above spend most of their wall time
 elsewhere (discovery, resolution, graph assembly, report rendering), not in
 `extract()` itself.
 
@@ -164,7 +164,7 @@ via `gen_fixture::generate` (the library function, not the binary — added as a
 dev-dependency of `import_lint_cli`), builds a `WatchSession` (whose
 constructor performs the untimed initial full run), edits one content file,
 and times a single `WatchSession::run_cycle([ContentEdit(...)])` call. It
-`assert!`s `< 100 ms` per the PLAN.md §8 target, and now passes comfortably.
+`assert!`s `< 100 ms` per the PLAN-v1.md §8 target, and now passes comfortably.
 Each run reports "105 files rechecked, 1 re-extracted" — `gen-fixture`'s
 barrel/star-export structure means the one edited file's export surface
 change propagates to ~104 other files via the dirty-set computation below,
@@ -175,7 +175,7 @@ still nowhere near the full 10,261-file project.
 `crates/cli/src/watch.rs`'s `WatchSession` now keeps the previous cycle's
 `ModuleGraph` and a persistent per-file diagnostics map
 (`HashMap<PathBuf, Vec<RenderedDiagnostic>>`) alive across cycles, instead of
-rebuilding everything from scratch every time (PLAN.md §7). A cycle whose
+rebuilding everything from scratch every time (PLAN-v1.md §7). A cycle whose
 changes are *all* `ContentEdit`s takes a fast path
 (`WatchSession::run_fast_cycle`):
 

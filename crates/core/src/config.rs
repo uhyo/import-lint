@@ -1,5 +1,5 @@
 //! `.importlintrc.jsonc` / `.importlintrc.json` config model, discovery, and jsonc
-//! loading (PLAN.md §4, D7, M5).
+//! loading (PLAN-v1.md §4, D7, M5).
 //!
 //! Project root = the directory containing the config file (fallback: the caller's
 //! cwd when no config file exists); `include`/`exclude`/`tsconfig` are all
@@ -44,7 +44,7 @@ impl Default for LintConfig {
 }
 
 /// The `rules` map. A map (rather than a single option block) keeps the door open
-/// for future rules without a config-shape break (PLAN.md §4).
+/// for future rules without a config-shape break (PLAN-v1.md §4).
 #[derive(Debug, Clone, Deserialize, Default)]
 #[serde(rename_all = "camelCase", deny_unknown_fields, default)]
 pub struct Rules {
