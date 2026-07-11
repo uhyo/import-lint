@@ -1,11 +1,14 @@
 [package]
-name = "import_lint_cli"
+name = "import-lint"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
-publish = false
+description = "A fast standalone linter enforcing JSDoc @package/@private import access rules in TypeScript/JavaScript projects (a port of eslint-plugin-import-access)"
+keywords = ["lint", "typescript", "import", "jsdoc", "cli"]
+categories = ["development-tools", "command-line-utilities"]
+readme = "../../README.md"
 
 [lib]
 name = "import_lint_cli"
@@ -18,7 +21,7 @@ path = "src/main.rs"
 [dependencies]
 clap = { workspace = true }
 ignore = { workspace = true }
-import_lint = { path = "../core" }
+import_lint = { path = "../core", package = "import-lint-core", version = "0.1.0" }
 notify = { workspace = true }
 notify-debouncer-full = { workspace = true }
 oxc_allocator = { workspace = true }

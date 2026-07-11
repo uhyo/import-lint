@@ -16,11 +16,17 @@ stays fast on large codebases without needing a full TypeScript type-check.
 ## Installation
 
 ```sh
-cargo install --path . --locked
+cargo install import-lint
 ```
 
-(Not yet published to crates.io; prebuilt binaries via GitHub Releases are planned —
-see [Roadmap](#roadmap).)
+Or grab a prebuilt binary for your platform from
+[GitHub Releases](https://github.com/uhyo/import-lint/releases).
+
+To build from a local checkout instead:
+
+```sh
+cargo install --path crates/cli --locked
+```
 
 ## Quickstart
 
@@ -258,8 +264,8 @@ machine details, and reproduction commands):
   `docs/benchmarks.md` for the design and measurements.
 
 Reproduce with `scripts/bench.sh` (add `--compare-eslint` for the ESLint
-comparison) and `cargo bench -p import_lint --bench extract`.
+comparison) and `cargo bench -p import-lint-core --bench extract`.
 
 ## Roadmap
 
-- Prebuilt binaries and a crates.io release.
+- v1.0 stabilization following the v0.1.0 crates.io / GitHub Releases launch.

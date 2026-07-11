@@ -113,7 +113,7 @@ the rest of the script.
 Command:
 
 ```sh
-cargo bench -p import_lint --bench extract
+cargo bench -p import-lint-core --bench extract
 ```
 
 Benchmarks `import_lint::extract_file` over a hand-written ~150-line
@@ -147,7 +147,7 @@ Command (must be release mode — the debug-build pipeline is far slower than
 100 ms even for a no-op cycle):
 
 ```sh
-cargo test --release -p import_lint_cli --test watch -- --ignored watch_cycle_timing_10k --nocapture
+cargo test --release -p import-lint --test watch -- --ignored watch_cycle_timing_10k --nocapture
 ```
 
 Three consecutive runs:
@@ -219,7 +219,7 @@ timing instrumentation (`crates/cli/src/timing.rs`): set
 to stderr for each instrumented phase.
 
 ```sh
-IMPORT_LINT_TIMING=1 cargo test --release -p import_lint_cli --test watch -- --ignored watch_cycle_timing_10k --nocapture
+IMPORT_LINT_TIMING=1 cargo test --release -p import-lint --test watch -- --ignored watch_cycle_timing_10k --nocapture
 ```
 
 This is the phase breakdown from *before* the incremental design above was
@@ -250,6 +250,6 @@ design above now avoids.
 cargo build --release
 scripts/bench.sh                    # cold lint, 5k + 10k
 scripts/bench.sh --compare-eslint   # + reference ESLint plugin, 5k only (slow, ~30s)
-cargo bench -p import_lint --bench extract
-cargo test --release -p import_lint_cli --test watch -- --ignored watch_cycle_timing_10k --nocapture
+cargo bench -p import-lint-core --bench extract
+cargo test --release -p import-lint --test watch -- --ignored watch_cycle_timing_10k --nocapture
 ```

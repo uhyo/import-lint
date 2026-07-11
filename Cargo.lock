@@ -506,7 +506,27 @@ dependencies = [
 ]
 
 [[package]]
-name = "import_lint"
+name = "import-lint"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "gen-fixture",
+ "ignore",
+ "import-lint-core",
+ "notify",
+ "notify-debouncer-full",
+ "oxc_allocator",
+ "oxc_parser",
+ "oxc_span",
+ "oxc_str",
+ "rayon",
+ "serde",
+ "serde_json",
+ "tempfile",
+]
+
+[[package]]
+name = "import-lint-core"
 version = "0.1.0"
 dependencies = [
  "criterion",
@@ -521,26 +541,6 @@ dependencies = [
  "oxc_semantic",
  "oxc_span",
  "oxc_str",
- "serde",
- "serde_json",
- "tempfile",
-]
-
-[[package]]
-name = "import_lint_cli"
-version = "0.1.0"
-dependencies = [
- "clap",
- "gen-fixture",
- "ignore",
- "import_lint",
- "notify",
- "notify-debouncer-full",
- "oxc_allocator",
- "oxc_parser",
- "oxc_span",
- "oxc_str",
- "rayon",
  "serde",
  "serde_json",
  "tempfile",

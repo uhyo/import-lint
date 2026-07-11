@@ -492,7 +492,7 @@ fn poll_watcher_smoke_test_detects_a_real_content_edit() {
 /// debug-build pipeline is far slower than 100ms even for a trivial cycle):
 ///
 /// ```sh
-/// cargo test --release -p import_lint_cli --test watch -- --ignored watch_cycle_timing_10k --nocapture
+/// cargo test --release -p import-lint --test watch -- --ignored watch_cycle_timing_10k --nocapture
 /// ```
 #[test]
 #[ignore]
