@@ -359,6 +359,7 @@ dependencies = [
 name = "import_lint"
 version = "0.1.0"
 dependencies = [
+ "globset",
  "nodejs-built-in-modules",
  "oxc_allocator",
  "oxc_ast",

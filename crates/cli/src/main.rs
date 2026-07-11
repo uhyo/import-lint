@@ -1,12 +1,16 @@
 //! ImportLint CLI entry point.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use clap::{Parser as ClapParser, Subcommand};
-use import_lint::{CheckedEntry, ExportInfo, FileModuleInfo, Provenance, extract_file};
+use import_lint::diagnostics::line_col;
+use import_lint::{
+    CheckedEntry, Diagnostic, ExportInfo, FileModuleInfo, JsdocRuleOptions, Provenance,
+    check_graph, extract_file,
+};
 use import_lint_cli::runner::RunnerOptions;
 use import_lint_cli::source_type::{SUPPORTED_EXTENSIONS_MESSAGE, source_type_for_path};
 use oxc_allocator::Allocator;
@@ -21,8 +25,13 @@ struct Cli {
     #[command(subcommand)]
     command: Option<Command>,
 
-    /// Paths to lint (overrides the configured include roots). Not yet implemented.
+    /// Paths to lint (default: the current directory).
     paths: Vec<PathBuf>,
+
+    /// Path to the project's `tsconfig.json` (default: `./tsconfig.json` if it
+    /// exists).
+    #[arg(long)]
+    tsconfig: Option<PathBuf>,
 }
 
 #[derive(Subcommand, Debug)]
@@ -51,12 +60,80 @@ fn main() -> ExitCode {
     match cli.command {
         Some(Command::Inspect { file }) => inspect(&file),
         Some(Command::Graph { paths, tsconfig }) => graph(paths, tsconfig),
-        None => {
-            let _ = cli.paths;
-            println!("import-lint: not yet implemented");
-            ExitCode::SUCCESS
-        }
+        None => lint(cli.paths, cli.tsconfig),
     }
+}
+
+/// The default (no-subcommand) invocation: run discovery + link + check over
+/// `paths` (default: `.`) and print a human-readable diagnostic report.
+fn lint(paths: Vec<PathBuf>, tsconfig: Option<PathBuf>) -> ExitCode {
+    let roots = if paths.is_empty() {
+        vec![PathBuf::from(".")]
+    } else {
+        paths
+    };
+
+    let project_root = match std::env::current_dir() {
+        Ok(dir) => dir,
+        Err(err) => {
+            eprintln!("import-lint: cannot determine current directory: {err}");
+            return ExitCode::from(2);
+        }
+    };
+    let tsconfig = tsconfig.or_else(|| RunnerOptions::default_tsconfig(&project_root));
+
+    let options = RunnerOptions {
+        roots,
+        project_root: project_root.clone(),
+        tsconfig,
+        self_reference_mode: import_lint::SelfReferenceMode::default(),
+    };
+    let module_graph = import_lint_cli::run(&options);
+
+    let diagnostics = check_graph(&module_graph, &JsdocRuleOptions::default(), &project_root);
+
+    if diagnostics.is_empty() {
+        return ExitCode::SUCCESS;
+    }
+
+    let mut source_cache: HashMap<PathBuf, String> = HashMap::new();
+    for diagnostic in &diagnostics {
+        print_diagnostic(diagnostic, &project_root, &mut source_cache);
+    }
+    println!();
+    println!(
+        "\u{2716} {} problem{}",
+        diagnostics.len(),
+        if diagnostics.len() == 1 { "" } else { "s" }
+    );
+
+    ExitCode::from(1)
+}
+
+/// Print one diagnostic in the form `path:line:col error <message> (import-access/jsdoc)`,
+/// with `path` relative to `project_root` when possible. Reads (and caches) each
+/// diagnosed file's source once, to compute line/column from the diagnostic's byte
+/// span.
+fn print_diagnostic(
+    diagnostic: &Diagnostic,
+    project_root: &Path,
+    source_cache: &mut HashMap<PathBuf, String>,
+) {
+    let source = source_cache
+        .entry(diagnostic.path.clone())
+        .or_insert_with(|| fs::read_to_string(&diagnostic.path).unwrap_or_default());
+    let (line, column) = line_col(source, diagnostic.span.start);
+
+    let display_path = diagnostic
+        .path
+        .strip_prefix(project_root)
+        .unwrap_or(&diagnostic.path);
+
+    println!(
+        "{}:{line}:{column} error {} (import-access/jsdoc)",
+        display_path.display(),
+        diagnostic.message(),
+    );
 }
 
 fn inspect(file: &Path) -> ExitCode {
