@@ -13,6 +13,7 @@ path = "src/lib.rs"
 
 [dependencies]
 globset = { workspace = true }
+jsonc-parser = { workspace = true, features = ["serde"] }
 nodejs-built-in-modules = { workspace = true }
 oxc_allocator = { workspace = true }
 oxc_ast = { workspace = true }

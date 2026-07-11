@@ -16,7 +16,7 @@ use rayon::prelude::*;
 use crate::source_type::source_type_for_path;
 
 /// Options for one pipeline run.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct RunnerOptions {
     /// Roots to walk for lint targets (PLAN.md §2.1 step 2).
     pub roots: Vec<PathBuf>,
@@ -30,6 +30,9 @@ pub struct RunnerOptions {
     /// How bare specifiers matching the importer's own package name are classified
     /// (spec §4.6, D5). Default: `SelfReferenceMode::External`.
     pub self_reference_mode: SelfReferenceMode,
+    /// Extra glob patterns (config `exclude`, M5) applied on top of `.gitignore`
+    /// during discovery, rooted at `project_root`. Default: none.
+    pub exclude: Vec<String>,
 }
 
 impl RunnerOptions {
@@ -48,7 +51,11 @@ impl RunnerOptions {
 /// `star_exports`) — repeating until a fixpoint is reached. Never panics on a single
 /// file's read/parse/resolve failure; such files are skipped with a stderr warning.
 pub fn run(options: &RunnerOptions) -> ModuleGraph {
-    let lint_target_paths = crate::walk::walk(&options.roots);
+    let lint_target_paths = crate::walk::walk_with_excludes(
+        &options.roots,
+        Some(options.project_root.as_path()),
+        &options.exclude,
+    );
     let lint_targets: HashSet<PathBuf> = lint_target_paths.iter().cloned().collect();
 
     let pool = AllocatorPool::new(rayon::current_num_threads());

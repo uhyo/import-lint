@@ -198,6 +198,7 @@ fn run_option_set(name: &str) {
         project_root: project_root.clone(),
         tsconfig: Some(project_root.join("tsconfig.json")),
         self_reference_mode,
+        exclude: Vec::new(),
     };
     let graph = import_lint_cli::run(&runner_options);
     let diagnostics = check_graph(&graph, &options, &project_root);

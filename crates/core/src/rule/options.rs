@@ -31,10 +31,14 @@ pub enum SelfRefOpt {
 /// Options for the `jsdoc` rule (spec §4). Deserializes the exact camelCase option
 /// names the reference plugin accepts: `indexLoophole`, `filenameLoophole`,
 /// `defaultImportability`, `treatSelfReferenceAs`, `excludeSourcePatterns`,
-/// `packageDirectory`. Unknown fields are accepted (not denied) since manifests may
-/// carry other rule options alongside these.
+/// `packageDirectory`. `deny_unknown_fields` is typo protection for the config file
+/// (M5): a misspelled option name is a hard load error rather than a silently
+/// ignored no-op. This is also what makes `config::JsdocRuleConfig`'s
+/// `#[serde(flatten)]` field reject unknown keys, since serde disallows
+/// `deny_unknown_fields` on a struct that itself has a flatten field — the
+/// flattened type is where that check has to live instead.
 #[derive(Debug, Clone, Deserialize)]
-#[serde(rename_all = "camelCase", default)]
+#[serde(rename_all = "camelCase", deny_unknown_fields, default)]
 pub struct JsdocRuleOptions {
     pub index_loophole: bool,
     pub filename_loophole: bool,

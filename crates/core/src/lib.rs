@@ -6,12 +6,14 @@
 //! module graph and resolver integration, and the rule engine. See `docs/PLAN.md` in
 //! the workspace root for the full design.
 
+pub mod config;
 pub mod diagnostics;
 pub mod extract;
 pub mod graph;
 pub mod resolve;
 pub mod rule;
 
+pub use config::{ConfigError, LintConfig, Rules, Severity, find_config};
 pub use diagnostics::{Diagnostic, MessageId};
 pub use extract::{
     Access, CheckedEntry, EntryKind, ExportInfo, FileModuleInfo, extract as extract_file,

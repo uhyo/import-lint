@@ -70,6 +70,7 @@ fn default_options(root: &Path, project_root: &Path) -> RunnerOptions {
         project_root: project_root.to_path_buf(),
         tsconfig: RunnerOptions::default_tsconfig(project_root),
         self_reference_mode: SelfReferenceMode::default(),
+        exclude: Vec::new(),
     }
 }
 
