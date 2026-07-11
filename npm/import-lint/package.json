@@ -1,0 +1,40 @@
+{
+  "name": "import-lint",
+  "version": "0.0.0",
+  "description": "A fast standalone linter enforcing JSDoc @package/@private import access rules in TypeScript/JavaScript projects (a port of eslint-plugin-import-access)",
+  "keywords": [
+    "lint",
+    "linter",
+    "typescript",
+    "javascript",
+    "import",
+    "jsdoc",
+    "eslint",
+    "cli"
+  ],
+  "license": "MIT",
+  "author": "uhyo",
+  "homepage": "https://github.com/uhyo/import-lint#readme",
+  "bugs": "https://github.com/uhyo/import-lint/issues",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/uhyo/import-lint.git"
+  },
+  "bin": {
+    "import-lint": "bin/import-lint.js"
+  },
+  "files": [
+    "bin/"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "optionalDependencies": {
+    "@import-lint/darwin-arm64": "0.0.0",
+    "@import-lint/darwin-x64": "0.0.0",
+    "@import-lint/linux-arm64-gnu": "0.0.0",
+    "@import-lint/linux-x64-gnu": "0.0.0",
+    "@import-lint/linux-x64-musl": "0.0.0",
+    "@import-lint/win32-x64": "0.0.0"
+  }
+}

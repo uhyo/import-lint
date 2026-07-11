@@ -1,0 +1,19 @@
+{
+  "name": "@import-lint/darwin-arm64",
+  "version": "0.0.0",
+  "description": "import-lint prebuilt binary for darwin-arm64 (macOS Apple Silicon). Internal package — install `import-lint` instead.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/uhyo/import-lint.git"
+  },
+  "os": [
+    "darwin"
+  ],
+  "cpu": [
+    "arm64"
+  ],
+  "files": [
+    "import-lint"
+  ]
+}

@@ -1,0 +1,22 @@
+{
+  "name": "@import-lint/linux-arm64-gnu",
+  "version": "0.0.0",
+  "description": "import-lint prebuilt binary for linux-arm64 (glibc). Internal package — install `import-lint` instead.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/uhyo/import-lint.git"
+  },
+  "os": [
+    "linux"
+  ],
+  "cpu": [
+    "arm64"
+  ],
+  "libc": [
+    "glibc"
+  ],
+  "files": [
+    "import-lint"
+  ]
+}
