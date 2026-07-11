@@ -8,7 +8,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use import_lint::diagnostics::line_col;
-use import_lint::{LintConfig, ModuleGraph, Provenance, Severity, check_graph};
+use import_lint::{LintConfig, ModuleGraph, Provenance, Severity, check_files};
 
 use crate::output::{OutputSeverity, RenderedDiagnostic};
 use crate::timing;
@@ -42,41 +42,29 @@ pub fn build_report(
     project_root: &Path,
     options: &ReportOptions,
 ) -> ReportResult {
-    let mut source_cache: HashMap<PathBuf, String> = HashMap::new();
-    let mut diagnostics: Vec<RenderedDiagnostic> = Vec::new();
+    let targets: Vec<&Path> = module_graph
+        .lint_targets
+        .iter()
+        .map(PathBuf::as_path)
+        .collect();
+    let by_file = timing::phase("check_graph", || {
+        diagnostics_by_file(module_graph, config, project_root, options, &targets)
+    });
+    finish_report(by_file.into_values().flatten(), options)
+}
 
-    let severity = config.rules.jsdoc.severity;
-    if severity != Severity::Off {
-        let output_severity = match severity {
-            Severity::Error => OutputSeverity::Error,
-            Severity::Warn => OutputSeverity::Warn,
-            Severity::Off => unreachable!("checked above"),
-        };
-        let core_diagnostics = timing::phase("check_graph", || {
-            check_graph(module_graph, &config.rules.jsdoc.options, project_root)
-        });
-        for diagnostic in &core_diagnostics {
-            let source = read_cached(&mut source_cache, &diagnostic.path);
-            let (line, column) = line_col(source, diagnostic.span.start);
-            let (end_line, end_column) = line_col(source, diagnostic.span.end);
-            diagnostics.push(RenderedDiagnostic {
-                file: diagnostic.path.clone(),
-                line,
-                column,
-                end_line,
-                end_column,
-                severity: output_severity,
-                rule_id: "import-access/jsdoc",
-                message: diagnostic.message(),
-                message_id: diagnostic.message_id.as_str().to_string(),
-            });
-        }
-    }
-
-    if options.report_unresolved {
-        collect_unresolved(module_graph, &mut source_cache, &mut diagnostics);
-    }
-
+/// Sort and `--quiet`-filter a flat stream of diagnostics into the same shape
+/// [`build_report`] has always produced. Takes an iterator rather than the
+/// `diagnostics_by_file` map directly so `crates/cli/src/watch.rs`'s incremental fast
+/// path can compose its *persistent* per-file map (`self.diagnostics_map`) into a
+/// `CycleOutcome` by borrowing and cloning just the diagnostics themselves
+/// (`self.diagnostics_map.values().flatten().cloned()`), without cloning the whole
+/// map every cycle — the entire point of keeping a per-file map across cycles.
+pub fn finish_report(
+    diagnostics: impl IntoIterator<Item = RenderedDiagnostic>,
+    options: &ReportOptions,
+) -> ReportResult {
+    let mut diagnostics: Vec<RenderedDiagnostic> = diagnostics.into_iter().collect();
     diagnostics.sort_by(|a, b| (&a.file, a.line, a.column).cmp(&(&b.file, b.line, b.column)));
 
     let has_error = diagnostics
@@ -93,6 +81,79 @@ pub fn build_report(
     }
 }
 
+/// Compute diagnostics restricted to `files`, grouped by file (each file's own list
+/// sorted by position) — the per-file counterpart to [`build_report`]. Every path in
+/// `files` is guaranteed to appear as a key, with an empty `Vec` if it turned out
+/// clean, so a caller can always replace old map entries with this result's entries
+/// wholesale without leaving a stale diagnostic behind for a file that's no longer
+/// dirty.
+///
+/// Every diagnostic (both a `check_files` rule violation and a `--report-unresolved`
+/// note) is self-attributed to the importer file it's about — see
+/// [`check_files`]'s one-hop doc comment and [`collect_unresolved`]'s `target` loop
+/// variable — so grouping by `diagnostic.file`/`diagnostic.path` is exact: nothing
+/// about a file `f`'s entry here depends on any *other* lint target's own
+/// diagnostics. This is what makes watch mode's incremental fast path
+/// (`crates/cli/src/watch.rs`, PLAN.md §7) correct: recomputing just the dirty subset
+/// and merging into a persistent map gives the same result as recomputing everything.
+pub fn diagnostics_by_file(
+    module_graph: &ModuleGraph,
+    config: &LintConfig,
+    project_root: &Path,
+    options: &ReportOptions,
+    files: &[&Path],
+) -> HashMap<PathBuf, Vec<RenderedDiagnostic>> {
+    let mut source_cache: HashMap<PathBuf, String> = HashMap::new();
+    let mut by_file: HashMap<PathBuf, Vec<RenderedDiagnostic>> = files
+        .iter()
+        .map(|file| (file.to_path_buf(), Vec::new()))
+        .collect();
+
+    let severity = config.rules.jsdoc.severity;
+    if severity != Severity::Off {
+        let output_severity = match severity {
+            Severity::Error => OutputSeverity::Error,
+            Severity::Warn => OutputSeverity::Warn,
+            Severity::Off => unreachable!("checked above"),
+        };
+        let core_diagnostics = check_files(
+            module_graph,
+            &config.rules.jsdoc.options,
+            project_root,
+            files,
+        );
+        for diagnostic in &core_diagnostics {
+            let source = read_cached(&mut source_cache, &diagnostic.path);
+            let (line, column) = line_col(source, diagnostic.span.start);
+            let (end_line, end_column) = line_col(source, diagnostic.span.end);
+            by_file
+                .entry(diagnostic.path.clone())
+                .or_default()
+                .push(RenderedDiagnostic {
+                    file: diagnostic.path.clone(),
+                    line,
+                    column,
+                    end_line,
+                    end_column,
+                    severity: output_severity,
+                    rule_id: "import-access/jsdoc",
+                    message: diagnostic.message(),
+                    message_id: diagnostic.message_id.as_str().to_string(),
+                });
+        }
+    }
+
+    if options.report_unresolved {
+        collect_unresolved(module_graph, files, &mut source_cache, &mut by_file);
+    }
+
+    for diagnostics in by_file.values_mut() {
+        diagnostics.sort_by_key(|d| (d.line, d.column));
+    }
+
+    by_file
+}
+
 fn read_cached<'a>(cache: &'a mut HashMap<PathBuf, String>, path: &Path) -> &'a str {
     cache
         .entry(path.to_path_buf())
@@ -100,14 +161,15 @@ fn read_cached<'a>(cache: &'a mut HashMap<PathBuf, String>, path: &Path) -> &'a 
 }
 
 /// `--report-unresolved`: emit a warn-severity diagnostic for every checked entry
-/// whose specifier failed to resolve (D8's opt-in debug aid). These never affect
-/// the exit code (M5 brief §3).
+/// (among `files`) whose specifier failed to resolve (D8's opt-in debug aid). These
+/// never affect the exit code (M5 brief §3).
 fn collect_unresolved(
     graph: &ModuleGraph,
+    files: &[&Path],
     source_cache: &mut HashMap<PathBuf, String>,
-    diagnostics: &mut Vec<RenderedDiagnostic>,
+    by_file: &mut HashMap<PathBuf, Vec<RenderedDiagnostic>>,
 ) {
-    for target in &graph.lint_targets {
+    for &target in files {
         let Some(file) = graph.file(target) else {
             continue;
         };
@@ -121,17 +183,20 @@ fn collect_unresolved(
             let source = read_cached(source_cache, target);
             let (line, column) = line_col(source, entry.span.start);
             let (end_line, end_column) = line_col(source, entry.span.end);
-            diagnostics.push(RenderedDiagnostic {
-                file: target.clone(),
-                line,
-                column,
-                end_line,
-                end_column,
-                severity: OutputSeverity::Warn,
-                rule_id: "import-access/unresolved",
-                message: format!("Unresolved import specifier '{}'", entry.specifier),
-                message_id: "unresolved".to_string(),
-            });
+            by_file
+                .entry(target.to_path_buf())
+                .or_default()
+                .push(RenderedDiagnostic {
+                    file: target.to_path_buf(),
+                    line,
+                    column,
+                    end_line,
+                    end_column,
+                    severity: OutputSeverity::Warn,
+                    rule_id: "import-access/unresolved",
+                    message: format!("Unresolved import specifier '{}'", entry.specifier),
+                    message_id: "unresolved".to_string(),
+                });
         }
     }
 }

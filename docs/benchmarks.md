@@ -137,10 +137,11 @@ elsewhere (discovery, resolution, graph assembly, report rendering), not in
 
 ## Watch-mode single-edit cycle at 10k files (target: < 100 ms)
 
-**Target is currently missed** — measured cycle time is consistently in the
-**155–220 ms** range, roughly 1.6–2x over the 100 ms target. This is a real,
-reproducible finding, documented here for a follow-up rather than fixed now
-(see [Why, and what a fix would look like](#why-and-what-a-fix-would-look-like)).
+**Target is met with large headroom**: measured cycle time is consistently in
+the **~4.6–5.6 ms** range, roughly 20–22x under the 100 ms target. This
+supersedes an earlier finding in this document (155–220 ms, ~1.6–2x *over*
+target) that was fixed by an incremental fast path — see
+[The incremental design](#the-incremental-design) below.
 
 Command (must be release mode — the debug-build pipeline is far slower than
 100 ms even for a no-op cycle):
@@ -153,9 +154,9 @@ Three consecutive runs:
 
 | Run | Cycle duration |
 |---|---|
-| 1 | 167.3 ms |
-| 2 | 221.5 ms |
-| 3 | 170.5 ms |
+| 1 | 5.31 ms |
+| 2 | 4.69 ms |
+| 3 | 4.62 ms |
 
 The test (`crates/cli/tests/watch.rs::watch_cycle_timing_10k`, `#[ignore]`d so
 it doesn't run in `cargo test --workspace` or CI) generates a 10,261-file tree
@@ -163,14 +164,57 @@ via `gen_fixture::generate` (the library function, not the binary — added as a
 dev-dependency of `import_lint_cli`), builds a `WatchSession` (whose
 constructor performs the untimed initial full run), edits one content file,
 and times a single `WatchSession::run_cycle([ContentEdit(...)])` call. It
-`assert!`s `< 100 ms` per the M7 brief, so it currently fails when run — that
-failure is the expected, documented state of this finding, not a bug in the
-test.
+`assert!`s `< 100 ms` per the PLAN.md §8 target, and now passes comfortably.
+Each run reports "105 files rechecked, 1 re-extracted" — `gen-fixture`'s
+barrel/star-export structure means the one edited file's export surface
+change propagates to ~104 other files via the dirty-set computation below,
+still nowhere near the full 10,261-file project.
 
-### Where the time goes
+### The incremental design
 
-`runner.rs` and `report.rs` now have permanent, zero-cost-when-disabled
-per-phase timing instrumentation (`crates/cli/src/timing.rs`): set
+`crates/cli/src/watch.rs`'s `WatchSession` now keeps the previous cycle's
+`ModuleGraph` and a persistent per-file diagnostics map
+(`HashMap<PathBuf, Vec<RenderedDiagnostic>>`) alive across cycles, instead of
+rebuilding everything from scratch every time (PLAN.md §7). A cycle whose
+changes are *all* `ContentEdit`s takes a fast path
+(`WatchSession::run_fast_cycle`):
+
+1. **No full-project `stat()` sweep.** Only the changed paths are
+   re-extracted (the watcher is trusted) — everything else's cached
+   extraction is reused untouched.
+2. Each changed file's **export surface** (its `export_table`'s
+   name→access map plus `star_exports`, deliberately excluding spans — moving
+   a JSDoc comment without changing the access it declares must not count as
+   a change) is diffed against the previous extraction.
+3. **Graph surgery in place**: `ModuleGraph::files[path]` is replaced, the
+   changed file's own resolutions are recomputed against the *existing*
+   resolver (a content edit can't change what any *other* file resolves to),
+   and the reverse indices (`importers`/`star_importers`) are patched —
+   dropping the edges the old version contributed and adding the new ones —
+   instead of being rebuilt from the whole project.
+4. The **dirty set** is the changed files, plus — only for files whose export
+   surface actually changed — their direct importers and the transitive
+   `star_importers` closure (barrels that `export * from` a changed file
+   re-expose its surface to their own importers, recursively).
+5. Only the dirty set is re-checked (`import_lint::check_files`, a new
+   subset-scoped sibling of `check_graph`) and re-rendered; the persistent
+   diagnostics map's entries for those files are replaced, and the final
+   diagnostic list is composed from the whole map.
+6. A handful of rare cases (an extraction failure, a changed file's ambient
+   modules changing, or an edit that newly resolves to a file the graph has
+   never seen) fall back to the original full re-walk + full recheck path —
+   always correct, just not fast; these are documented and tested in
+   `crates/cli/tests/watch.rs`.
+
+This directly eliminates the two dominant costs identified in the original
+profiling below: `graph_build` (rebuilding the whole `ModuleGraph` from
+scratch, ~44.7 ms) and `check_graph`/`build_report_total` (checking every
+lint target, ~48.7 ms) are both now O(dirty set), not O(all files).
+
+### Where the time went (superseded profiling, kept for context)
+
+`runner.rs` and `report.rs` have permanent, zero-cost-when-disabled per-phase
+timing instrumentation (`crates/cli/src/timing.rs`): set
 `IMPORT_LINT_TIMING=1` (any non-empty value) to print `[timing] <phase>: <ms>`
 to stderr for each instrumented phase.
 
@@ -178,13 +222,11 @@ to stderr for each instrumented phase.
 IMPORT_LINT_TIMING=1 cargo test --release -p import_lint_cli --test watch -- --ignored watch_cycle_timing_10k --nocapture
 ```
 
-One representative cycle (total 169.8 ms, matching the un-instrumented range
-above — note the `eprintln!` calls this env var turns on have their own small
-but non-negligible overhead, so treat the *proportions* below as reliable and
-the *absolute total* of instrumented-run numbers as slightly inflated versus
-the clean numbers in the table above):
+This is the phase breakdown from *before* the incremental design above was
+implemented (one representative cycle, total 169.8 ms, matching the
+un-instrumented 155–220 ms range this document originally reported):
 
-| Phase | Time | What it is |
+| Phase | Time | What it was |
 |---|---|---|
 | `stat(10261 paths)` | 24.5 ms | `mtime`/`size` check against the extraction cache for every walked path (only 1 is actually re-parsed) |
 | `parse(1 files)` | 0.1 ms | the one file that actually changed |
@@ -197,43 +239,10 @@ the clean numbers in the table above):
 | `check_graph` (nested in `build_report_total`) | 35.2 ms | the rule engine over every lint target |
 | `build_report_total` | 48.7 ms | `check_graph` above plus diagnostic line/col lookup, sort, `--quiet` filtering |
 
-Summed instrumented phases (excluding the double-counted nested `check_graph`)
-account for ~148 ms of the ~170 ms total; the remaining ~20 ms is consistent
-with allocator churn from dropping the *previous* cycle's `ModuleGraph` (several
-10k+/40k+-entry `HashMap`s) at the end of `WatchSession::recheck`, which isn't
-separately instrumented.
-
-### Why, and what a fix would look like
-
-This is **by design**, not a bug: `crates/cli/src/watch.rs`'s module doc and
-`WatchSession::run_cycle` doc comment are explicit that watch mode always does
-a full re-walk-free-but-otherwise-full extract(-stale-only)+link+check pass
-every cycle (M6 brief D-W1) — extraction is cached per-file, but resolution,
-graph assembly, and the check phase always run over the *entire* project, not
-just files reachable from the edit. That's a deliberate simplicity trade-off
-from M6, and it's what's costing ~150+ ms here: `graph_build` (44.7 ms) and
-`check_graph`/`build_report_total` (48.7 ms) alone are the two biggest phases,
-both O(all files), even though only one file changed.
-
-A real fix is a genuine incremental-invalidation redesign — e.g. keeping the
-previous cycle's `ModuleGraph` and `resolutions` map alive, computing a dirty
-set from the reverse-edge index (`ModuleGraph::importers`/`star_importers`,
-which already exist for exactly this purpose per their doc comments) and only
-re-resolving/re-checking files reachable from it — which is out of scope for
-an M7 benchmarking pass per the "only implement optimizations if the fix is
-small and obvious" guidance. A smaller, lower-risk interim option worth
-evaluating in a follow-up: swap the hot per-cycle-rebuilt `HashMap`s (`ModuleGraph::files`/
-`resolutions`/`importers`/`star_importers`) to a faster (non-DoS-resistant)
-hasher, since `graph_build` and the merge/index phases above are dominated by
-`HashMap` insert cost over 10k-40k entries with `PathBuf`/tuple keys under the
-default SipHash — but that also touches public struct field types used across
-many call sites and tests, so it needs its own follow-up rather than a
-same-milestone patch.
-
-The `< 100 ms` assertion in `watch_cycle_timing_10k` is left in place
-(matching the PLAN.md §8 target) rather than loosened to the currently
-measured number, so this test keeps failing loudly — and gets re-profiled with
-the instrumentation above — until a follow-up closes the gap.
+The two O(all files) phases (`graph_build` and
+`check_graph`/`build_report_total`) accounted for the bulk of the ~170 ms
+total even though only one file had changed — exactly what the incremental
+design above now avoids.
 
 ## Reproducing everything
 

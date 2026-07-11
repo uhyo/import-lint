@@ -20,4 +20,4 @@ pub use extract::{
 };
 pub use graph::ModuleGraph;
 pub use resolve::{ProjectResolver, Provenance, SelfReferenceMode};
-pub use rule::{JsdocRuleOptions, check_graph};
+pub use rule::{JsdocRuleOptions, check_files, check_graph};

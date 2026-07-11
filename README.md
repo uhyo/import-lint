@@ -190,8 +190,10 @@ A status line follows every re-render:
 **What triggers a re-run:**
 
 - Editing a file already picked up by the lint (a `.ts`/`.tsx`/`.js`/... file under
-  an `include` root) re-checks the whole project — cheaply, since only the changed
-  file(s) are re-parsed (everything else is served from an extraction cache).
+  an `include` root) re-parses just that file and re-checks only the files whose
+  diagnostics could actually be affected: the file itself, and — only if the edit
+  changed what it exports — its importers, followed transitively through
+  `export * from` chains. Everything else is untouched.
 - Adding, removing, or renaming any file, or editing any `package.json`, re-walks
   the project and rebuilds the resolver from scratch (a new or deleted file can
   shadow a specifier resolution elsewhere).
@@ -250,10 +252,10 @@ machine details, and reproduction commands):
 - **~155x faster than the reference `eslint-plugin-import-access`** on the
   same 5,000-file tree (157 ms vs. 24.4 s), reflecting that ImportLint parses
   once with oxc rather than running full TypeScript-type-aware ESLint.
-- Watch-mode single-edit cycles at 10,000 files currently run **~155-220 ms**,
-  short of the < 100 ms target — a known, documented gap (full re-check every
-  cycle by design, per `crates/cli/src/watch.rs`'s M6 brief), not a regression;
-  see `docs/benchmarks.md` for the phase-by-phase breakdown and follow-up plan.
+- **Watch-mode single-edit cycles at 10,000 files run ~5 ms**, well under the
+  < 100 ms target — an incremental fast path (PLAN.md §7) patches the module
+  graph and re-checks only the dirty subset instead of the whole project; see
+  `docs/benchmarks.md` for the design and measurements.
 
 Reproduce with `scripts/bench.sh` (add `--compare-eslint` for the ESLint
 comparison) and `cargo bench -p import_lint --bench extract`.

@@ -27,6 +27,24 @@ pub fn check_graph(
     options: &JsdocRuleOptions,
     project_root: &Path,
 ) -> Vec<Diagnostic> {
+    let targets: Vec<&Path> = graph.lint_targets.iter().map(PathBuf::as_path).collect();
+    check_files(graph, options, project_root, &targets)
+}
+
+/// Same as [`check_graph`], but scoped to `files` instead of every lint target in
+/// `graph`. Watch mode's incremental fast path (`crates/cli/src/watch.rs`, PLAN.md
+/// §7) calls this with just the dirty set — the changed files plus, if their export
+/// surface changed, their importers and star-export closure — so a single-file edit
+/// doesn't re-check the whole project. Each file's diagnostics depend only on its own
+/// `checked_entries`/resolutions and the one-hop-reachable export tables (never on any
+/// other lint target's diagnostics), so checking a subset is exactly as correct as
+/// checking everything and discarding the rest.
+pub fn check_files(
+    graph: &ModuleGraph,
+    options: &JsdocRuleOptions,
+    project_root: &Path,
+    files: &[&Path],
+) -> Vec<Diagnostic> {
     let package_directory = options
         .package_directory
         .as_ref()
@@ -59,7 +77,7 @@ pub fn check_graph(
 
     let mut diagnostics = Vec::new();
 
-    for importer in &graph.lint_targets {
+    for &importer in files {
         let Some(file) = graph.file(importer) else {
             continue;
         };
@@ -105,7 +123,7 @@ pub fn check_graph(
             };
 
             diagnostics.push(Diagnostic {
-                path: importer.clone(),
+                path: importer.to_path_buf(),
                 span: entry.span,
                 message_id,
                 identifier,

@@ -213,6 +213,207 @@ fn content_edit_cycle_only_re_extracts_the_changed_file() {
     assert_eq!(outcome.extracted_files, 1);
 }
 
+/// Fast-path star-export closure (M7, PLAN.md §7 "locked design" step 5):
+/// `other/user.ts` imports `value` from `src/barrel.ts`, which only offers it via a
+/// bare `export * from "./inner"` (no explicit re-export of its own, so `barrel.ts`
+/// itself is never a checked entry) — the one-hop lookup for `user.ts` has to
+/// descend through the star-export chain into `src/inner.ts`. Editing `inner.ts`'s
+/// JSDoc access must propagate through that chain to `user.ts`'s diagnostic in both
+/// directions, exercising `propagate_star_closure`'s recursive
+/// `star_importers` walk, not just a direct-importer edge.
+#[test]
+fn content_edit_propagates_through_a_star_export_chain() {
+    let dir = TempDir::new().unwrap();
+    let inner = canonical(&write(
+        dir.path(),
+        "src/inner.ts",
+        "/** @package */\nexport const value = 1;\n",
+    ));
+    write(dir.path(), "src/barrel.ts", "export * from \"./inner\";\n");
+    write(
+        dir.path(),
+        "other/user.ts",
+        "import { value } from \"../src/barrel\";\nconsole.log(value);\n",
+    );
+
+    let mut session = WatchSession::new(session_options(dir.path())).expect("session builds");
+    assert_eq!(
+        session.last_diagnostics().len(),
+        1,
+        "user.ts and inner.ts are in different directories, so @package should violate"
+    );
+
+    fs::write(&inner, "/** @public */\nexport const value = 1;\n").unwrap();
+    let outcome = session.run_cycle(&[ChangeKind::ContentEdit(inner.clone())]);
+    assert!(
+        outcome.diagnostics.is_empty(),
+        "expected the star-chain violation to clear, got {:?}",
+        outcome.diagnostics
+    );
+
+    fs::write(&inner, "/** @package */\nexport const value = 1;\n").unwrap();
+    let outcome = session.run_cycle(&[ChangeKind::ContentEdit(inner)]);
+    assert_eq!(
+        outcome.diagnostics.len(),
+        1,
+        "expected the star-chain violation to reappear, got {:?}",
+        outcome.diagnostics
+    );
+}
+
+/// The passthrough re-export one-hop rule under the fast path (M7): `src/sub/barrel.ts`
+/// re-exports `x` from `src/inner.ts` via an *explicit* `/** @public */ export { x }
+/// from "../inner"` — the re-export statement's own JSDoc, not `inner.ts`'s, governs
+/// what `other/user.ts` (which imports `x` from the barrel) sees, per the one-hop
+/// rule ("never hop a second time" — `crates/core/src/rule/mod.rs`). Editing
+/// `inner.ts`'s own access can change *the barrel's own* diagnostic (its re-export
+/// checked entry looks at `inner.ts` directly), but must never change `user.ts`'s.
+#[test]
+fn content_edit_of_inner_does_not_leak_through_an_explicit_passthrough_reexport() {
+    let dir = TempDir::new().unwrap();
+    let inner = canonical(&write(
+        dir.path(),
+        "src/inner.ts",
+        "/** @public */\nexport const x = 1;\n",
+    ));
+    write(
+        dir.path(),
+        "src/sub/barrel.ts",
+        "/** @public */\nexport { x } from \"../inner\";\n",
+    );
+    write(
+        dir.path(),
+        "other/user.ts",
+        "import { x } from \"../src/sub/barrel\";\nconsole.log(x);\n",
+    );
+
+    let mut session = WatchSession::new(session_options(dir.path())).expect("session builds");
+    assert!(
+        session.last_diagnostics().is_empty(),
+        "expected a clean start, got {:?}",
+        session.last_diagnostics()
+    );
+
+    // @public -> @private: the barrel's own re-export becomes a violation (private
+    // is unconditional, no same-directory exception), but user.ts's own checked
+    // entry only ever consults the barrel's own (unchanged, still @public)
+    // export-table entry for "x" — it must stay clean.
+    fs::write(&inner, "/** @private */\nexport const x = 1;\n").unwrap();
+    let outcome = session.run_cycle(&[ChangeKind::ContentEdit(inner)]);
+    assert!(
+        outcome
+            .diagnostics
+            .iter()
+            .all(|d| !d.file.ends_with("user.ts")),
+        "user.ts must not see a diagnostic from editing inner.ts through an explicit \
+         passthrough re-export, got {:?}",
+        outcome.diagnostics
+    );
+    assert!(
+        outcome
+            .diagnostics
+            .iter()
+            .any(|d| d.file.ends_with("barrel.ts")),
+        "expected barrel.ts's own re-export to now be flagged, got {:?}",
+        outcome.diagnostics
+    );
+}
+
+/// A content edit that changes only a file's *own* imports (not its export surface)
+/// must not re-check anything but that one file (M7, PLAN.md §7's dirty-set
+/// definition): `b.ts` gains an import of `a.ts` but its own exported `b` stays
+/// untouched, so nothing that imports `b.ts` needs rechecking — there is nothing
+/// importing `b.ts` here, but the assertion that matters is `rechecked_files == 1`,
+/// not 2 (i.e. `a.ts` — which `b.ts` now imports — is not spuriously rechecked
+/// either).
+#[test]
+fn content_edit_changing_only_its_own_imports_rechecks_only_itself() {
+    let dir = TempDir::new().unwrap();
+    write(dir.path(), "src/a.ts", "export const a = 1;\n");
+    let b = canonical(&write(dir.path(), "src/b.ts", "export const b = 1;\n"));
+
+    let mut session = WatchSession::new(session_options(dir.path())).expect("session builds");
+
+    fs::write(
+        &b,
+        "import { a } from \"./a\";\nexport const b = 1;\nconsole.log(a);\n",
+    )
+    .unwrap();
+    let outcome = session.run_cycle(&[ChangeKind::ContentEdit(b)]);
+    assert_eq!(outcome.rechecked_files, 1);
+    assert!(outcome.diagnostics.is_empty());
+}
+
+/// The fast path's own documented escape hatch (M7, PLAN.md §7's "locked design"
+/// step 4): a content edit adds an import to a file that was never walked (it lives
+/// outside the watched root, `src/`, so it was never part of the initial graph) —
+/// the fast path can't reach a fixpoint for a brand-new graph node on its own and
+/// must fall back to a full reload rather than panicking.
+#[test]
+fn content_edit_referencing_a_never_walked_file_falls_back_without_panicking() {
+    let dir = TempDir::new().unwrap();
+    let a = canonical(&write(dir.path(), "src/a.ts", "export const a = 1;\n"));
+    write(
+        dir.path(),
+        "external/target.ts",
+        "/** @public */\nexport const t = 1;\n",
+    );
+
+    let options = WatchSessionOptions {
+        cli_paths: vec![dir.path().join("src")],
+        explicit_config: None,
+        cli_tsconfig: None,
+        report_unresolved: false,
+        quiet: false,
+        cwd: dir.path().to_path_buf(),
+    };
+    let mut session = WatchSession::new(options).expect("session builds");
+    assert!(session.last_diagnostics().is_empty());
+
+    fs::write(
+        &a,
+        "import { t } from \"../external/target\";\nexport const a = 1;\nconsole.log(t);\n",
+    )
+    .unwrap();
+    let outcome = session.run_cycle(&[ChangeKind::ContentEdit(a)]);
+
+    assert!(
+        outcome.diagnostics.is_empty(),
+        "target.ts is @public, so no violation is expected, got {:?}",
+        outcome.diagnostics
+    );
+}
+
+/// Span-insensitive surface comparison (M7, PLAN.md §7): moving `util.ts`'s JSDoc
+/// comment down a line (inserting a leading blank line) shifts every span in the
+/// file without changing which access level applies to `helper`. That must not
+/// count as an export-surface change, so `consumer.ts` (which imports `helper` and
+/// carries its own, unaffected, clean diagnostic — this fixture keeps the access
+/// level allowed) is never added to the dirty set.
+#[test]
+fn moving_a_jsdoc_comment_without_changing_access_rechecks_only_the_edited_file() {
+    let dir = TempDir::new().unwrap();
+    let (_consumer, util) = write_violation_fixture(dir.path());
+
+    let mut session = WatchSession::new(session_options(dir.path())).expect("session builds");
+    assert_eq!(session.last_diagnostics().len(), 1);
+
+    // Insert a leading blank line: every span in the file shifts, but the JSDoc
+    // still immediately precedes the same declaration with the same tag.
+    fs::write(&util, "\n/** @package */\nexport const helper = 1;\n").unwrap();
+    let outcome = session.run_cycle(&[ChangeKind::ContentEdit(util)]);
+
+    assert_eq!(
+        outcome.rechecked_files, 1,
+        "only util.ts itself should be rechecked, not consumer.ts"
+    );
+    assert_eq!(
+        outcome.diagnostics.len(),
+        1,
+        "consumer.ts's (unaffected) violation should still be reported from the cache"
+    );
+}
+
 #[test]
 fn new_returns_an_error_for_a_missing_explicit_config_instead_of_starting() {
     let dir = TempDir::new().unwrap();

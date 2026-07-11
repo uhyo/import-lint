@@ -5,13 +5,14 @@
 //! the thin `notify`/`notify-debouncer-full` layer that maps real filesystem events
 //! to [`ChangeKind`]s and drives a [`WatchSession`] from them (brief D-W2).
 
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::RecvTimeoutError;
 use std::time::{Duration, Instant};
 
-use import_lint::{LintConfig, ProjectResolver};
+use import_lint::{Access, FileModuleInfo, LintConfig, ModuleGraph, ProjectResolver, Provenance};
 use notify::event::{AccessKind, AccessMode, MetadataKind, ModifyKind};
 use notify::{Config as NotifyConfig, EventKind, PollWatcher, RecursiveMode, Watcher};
 use notify_debouncer_full::{
@@ -19,9 +20,10 @@ use notify_debouncer_full::{
     new_debouncer_opt,
 };
 use oxc_allocator::AllocatorPool;
+use oxc_str::CompactStr;
 
 use crate::output::RenderedDiagnostic;
-use crate::report::{ReportOptions, build_report};
+use crate::report::{ReportOptions, diagnostics_by_file, finish_report};
 use crate::runner::{self, ExtractionCache, RunnerOptions};
 use crate::setup::{self, ConfigLoadError};
 use crate::source_type::source_type_for_path;
@@ -126,6 +128,21 @@ pub struct WatchSession {
     extraction_cache: ExtractionCache,
     walked_paths: Vec<PathBuf>,
 
+    /// The current module graph, kept alive across cycles (not rebuilt from scratch
+    /// each time) so a content-edit-only cycle can patch it in place instead of
+    /// re-deriving it from the whole project (PLAN.md §7 incremental design).
+    /// Replaced wholesale by [`WatchSession::full_recheck`]; patched in place by
+    /// [`WatchSession::run_fast_cycle`].
+    graph: ModuleGraph,
+    /// Every lint target's own diagnostics (rule violations plus, if
+    /// `report_unresolved`, unresolved-specifier notes) — every diagnostic is
+    /// self-attributed to the importer file it's about (see
+    /// [`crate::report::diagnostics_by_file`]'s doc comment), so this map can be
+    /// updated file-by-file: [`WatchSession::full_recheck`] replaces it wholesale,
+    /// [`WatchSession::run_fast_cycle`] replaces only the dirty subset's entries.
+    /// [`WatchSession::compose_from_map`] flattens this into `last_diagnostics`.
+    diagnostics_map: HashMap<PathBuf, Vec<RenderedDiagnostic>>,
+
     last_diagnostics: Vec<RenderedDiagnostic>,
     last_has_error: bool,
 }
@@ -229,10 +246,13 @@ impl WatchSession {
             extraction_cache: cache,
             walked_paths: built.walked_paths,
 
+            graph: ModuleGraph::build(Vec::new(), HashMap::new(), HashSet::new()),
+            diagnostics_map: HashMap::new(),
+
             last_diagnostics: Vec::new(),
             last_has_error: false,
         };
-        session.recheck(built.initial);
+        session.full_recheck(built.initial);
         Ok(session)
     }
 
@@ -260,21 +280,26 @@ impl WatchSession {
         }
     }
 
-    /// Advance the session by one debounced batch of `changes` (M6 brief D-W1/D-W3):
+    /// Advance the session by one debounced batch of `changes` (M6/M7 brief,
+    /// PLAN.md §7):
     /// - `ConfigChanged`: reload the config; on success this also forces a full
     ///   reload (severity/options/include/exclude may have changed the walk itself);
     ///   on failure, keep the previous config and report the error via
     ///   `CycleOutcome::config_error` — watching continues either way.
     /// - `TsconfigChanged` or `Structural`: re-walk the roots and build a fresh
-    ///   `ProjectResolver` (a resolver's cache assumes a frozen filesystem layout).
-    /// - Otherwise (content-only batch): reuse the previous walk + resolver, just
-    ///   drop the changed paths' extraction-cache entries (belt-and-braces on top of
-    ///   the cache's own `mtime`/`size` staleness check — see `runner.rs`).
+    ///   `ProjectResolver` (a resolver's cache assumes a frozen filesystem layout),
+    ///   then a full recheck ([`WatchSession::full_recheck`]).
+    /// - Otherwise (every change is a `ContentEdit`, including the empty batch):
+    ///   [`WatchSession::run_fast_cycle`] — re-extract just the changed paths and
+    ///   patch the graph and diagnostics map in place, without a full-project `stat()`
+    ///   sweep, resolve pass, graph rebuild, or check pass. Falls back to a full
+    ///   reload + recheck on its own rare escape hatches (see that method's doc
+    ///   comment) — always correct, just not always fast.
     ///
-    /// Always ends with a full extract(-stale-only)+link+check pass and a re-render
-    /// of every diagnostic (the check phase is cheap pure computation, D-W1) —
     /// `CycleOutcome::extracted_files` is the number of files that were *actually*
-    /// re-parsed, which is 0 for a batch that touched nothing relevant.
+    /// re-parsed (0 for a batch that touched nothing); `rechecked_files` is the size
+    /// of whatever was actually re-checked this cycle (every lint target on a full
+    /// recheck, just the dirty set on a fast cycle).
     pub fn run_cycle(&mut self, changes: &[ChangeKind]) -> CycleOutcome {
         let start = Instant::now();
         let mut config_error = None;
@@ -299,18 +324,25 @@ impl WatchSession {
             }
         }
 
-        let initial = if need_full_reload {
-            self.full_reload()
+        let stats = if need_full_reload {
+            let initial = self.full_reload();
+            self.full_recheck(initial)
         } else {
-            for change in changes {
-                if let ChangeKind::ContentEdit(path) = change {
-                    self.extraction_cache.remove(path);
+            let changed_paths: Vec<PathBuf> = changes
+                .iter()
+                .filter_map(|change| match change {
+                    ChangeKind::ContentEdit(path) => Some(path.clone()),
+                    _ => None,
+                })
+                .collect();
+            match self.run_fast_cycle(&changed_paths) {
+                Some(stats) => stats,
+                None => {
+                    let initial = self.full_reload();
+                    self.full_recheck(initial)
                 }
             }
-            runner::extract_with_cache(&self.walked_paths, &self.pool, &mut self.extraction_cache)
         };
-
-        let stats = self.recheck(initial);
 
         CycleOutcome {
             diagnostics: self.last_diagnostics.clone(),
@@ -326,7 +358,7 @@ impl WatchSession {
     /// Re-walk `self.roots` (recomputed from the current config) and rebuild the
     /// resolver, returning the walked set's extraction (already served through
     /// `self.extraction_cache`) so the caller can feed it straight into
-    /// [`WatchSession::recheck`].
+    /// [`WatchSession::full_recheck`].
     fn full_reload(&mut self) -> runner::Extracted {
         let built = build_walk_and_resolver(
             &self.cli_paths,
@@ -343,9 +375,13 @@ impl WatchSession {
         built.initial
     }
 
-    /// Run the fixpoint extract+link pass from `initial` and the check phase,
-    /// updating `last_diagnostics`/`last_has_error`.
-    fn recheck(&mut self, initial: runner::Extracted) -> RecheckStats {
+    /// Run the fixpoint extract+link pass from `initial` and the check phase over
+    /// *every* lint target, replacing `self.graph` and `self.diagnostics_map`
+    /// wholesale. Called on session startup, on any
+    /// `Structural`/`ConfigChanged`(-success)/`TsconfigChanged` cycle, and as
+    /// [`WatchSession::run_fast_cycle`]'s fallback when it hits one of its escape
+    /// hatches.
+    fn full_recheck(&mut self, initial: runner::Extracted) -> RecheckStats {
         let outcome = runner::extract_and_link_from(
             &self.walked_paths,
             initial,
@@ -366,24 +402,236 @@ impl WatchSession {
             outcome.graph.lint_targets.iter().cloned().collect()
         });
 
-        let report = crate::timing::phase("build_report_total", || {
-            build_report(
-                &outcome.graph,
+        self.graph = outcome.graph;
+
+        let targets: Vec<&Path> = self
+            .graph
+            .lint_targets
+            .iter()
+            .map(PathBuf::as_path)
+            .collect();
+        self.diagnostics_map = crate::timing::phase("build_report_total", || {
+            diagnostics_by_file(
+                &self.graph,
                 &self.config,
                 &self.project_root,
                 &ReportOptions {
                     report_unresolved: self.report_unresolved,
                     quiet: self.quiet,
                 },
+                &targets,
             )
         });
-        self.last_diagnostics = report.diagnostics;
-        self.last_has_error = report.has_error;
+        self.compose_from_map();
 
         RecheckStats {
             rechecked_files,
             extracted_files,
             linted_files,
+        }
+    }
+
+    /// The fast path for a cycle whose changes are *all* `ContentEdit`s (M7,
+    /// PLAN.md §7's incremental design; `run_cycle` never calls this for a batch
+    /// containing a `Structural`/`ConfigChanged`/`TsconfigChanged`): re-extract just
+    /// `changed_paths`, patch `self.graph` in place (no full-project `stat()` sweep,
+    /// resolve pass, or graph rebuild), and recheck only the dirty subset.
+    ///
+    /// Returns `None` when the batch hits one of these rare escape hatches, in which
+    /// case the caller falls back to [`WatchSession::full_reload`] +
+    /// [`WatchSession::full_recheck`] (always correct, just not fast):
+    /// - a changed path failed to (re-)extract this cycle, or wasn't already a known
+    ///   graph file (`ContentEdit` is documented as an edit to an *existing*
+    ///   lintable file — anything else is out of this method's scope);
+    /// - a changed file's `ambient_modules` differ from before (the resolver's
+    ///   ambient registry is baked in at construction, so it can't be trusted to
+    ///   reflect this edit);
+    /// - one of a changed file's specifiers now resolves internally to a file that
+    ///   isn't in the graph yet (a newly-imported, never-walked file — reaching a
+    ///   fixpoint for that is `extract_and_link_from`'s job, not this method's).
+    fn run_fast_cycle(&mut self, changed_paths: &[PathBuf]) -> Option<RecheckStats> {
+        let mut unique_paths: Vec<PathBuf> = changed_paths.to_vec();
+        unique_paths.sort();
+        unique_paths.dedup();
+
+        for path in &unique_paths {
+            self.extraction_cache.remove(path);
+        }
+        let extracted =
+            runner::extract_with_cache(&unique_paths, &self.pool, &mut self.extraction_cache);
+        let extracted_files = extracted.extracted_files;
+
+        let mut new_files: HashMap<PathBuf, Arc<FileModuleInfo>> = HashMap::new();
+        for info in extracted.files {
+            new_files.insert(info.path.clone(), info);
+        }
+
+        for path in &unique_paths {
+            if !new_files.contains_key(path) || !self.graph.files.contains_key(path) {
+                return None;
+            }
+        }
+        for path in &unique_paths {
+            if self.graph.files[path].ambient_modules != new_files[path].ambient_modules {
+                return None;
+            }
+        }
+
+        // Span-insensitive: a JSDoc comment moving lines without changing which
+        // access level applies must not count as a surface change (an importer's
+        // diagnostic span lives in the importer's own source, never the exporter's).
+        let mut surface_changed: HashSet<PathBuf> = HashSet::new();
+        for path in &unique_paths {
+            if export_surface(&self.graph.files[path]) != export_surface(&new_files[path]) {
+                surface_changed.insert(path.clone());
+            }
+        }
+
+        // Graph surgery: replace `files[path]`, recompute each changed file's own
+        // resolutions against the *existing* resolver (other files' resolutions
+        // cannot change from a content edit), and patch the reverse indices.
+        for path in &unique_paths {
+            let old_info = self.graph.files[path].clone();
+            for specifier in &old_info.specifiers {
+                let key = (path.clone(), specifier.clone());
+                if let Some(Provenance::Internal(target)) = self.graph.resolutions.remove(&key) {
+                    if let Some(set) = self.graph.importers.get_mut(&target) {
+                        set.remove(path);
+                    }
+                    if let Some(set) = self.graph.star_importers.get_mut(&target) {
+                        set.remove(path);
+                    }
+                }
+            }
+
+            let new_info = new_files.remove(path).expect("checked above");
+            let star_specifiers: HashSet<&CompactStr> = new_info.star_exports.iter().collect();
+
+            for specifier in &new_info.specifiers {
+                let provenance = self.resolver.resolve(path, specifier);
+                if let Provenance::Internal(target) = &provenance {
+                    if !self.graph.files.contains_key(target) {
+                        // A partially-patched `self.graph` is fine here: the caller
+                        // discards it wholesale via `full_reload`+`full_recheck`.
+                        return None;
+                    }
+                    self.graph
+                        .importers
+                        .entry(target.clone())
+                        .or_default()
+                        .insert(path.clone());
+                    if star_specifiers.contains(specifier) {
+                        self.graph
+                            .star_importers
+                            .entry(target.clone())
+                            .or_default()
+                            .insert(path.clone());
+                    }
+                }
+                self.graph
+                    .resolutions
+                    .insert((path.clone(), specifier.clone()), provenance);
+            }
+
+            self.graph.files.insert(path.clone(), new_info);
+        }
+
+        // Dirty set: the changed files, plus, for each one whose export surface
+        // changed, its direct importers and the star-export closure.
+        let mut dirty: HashSet<PathBuf> = unique_paths.iter().cloned().collect();
+        for path in &unique_paths {
+            if surface_changed.contains(path) {
+                propagate_star_closure(&self.graph, path, &mut dirty);
+            }
+        }
+        dirty.retain(|path| self.graph.lint_targets.contains(path));
+
+        let dirty_refs: Vec<&Path> = dirty.iter().map(PathBuf::as_path).collect();
+        let dirty_result = crate::timing::phase("build_report_total", || {
+            diagnostics_by_file(
+                &self.graph,
+                &self.config,
+                &self.project_root,
+                &ReportOptions {
+                    report_unresolved: self.report_unresolved,
+                    quiet: self.quiet,
+                },
+                &dirty_refs,
+            )
+        });
+        self.diagnostics_map.extend(dirty_result);
+        self.compose_from_map();
+
+        let linted_files: Vec<PathBuf> = self.graph.lint_targets.iter().cloned().collect();
+
+        Some(RecheckStats {
+            rechecked_files: dirty.len(),
+            extracted_files,
+            linted_files,
+        })
+    }
+
+    /// Flatten `self.diagnostics_map` into `last_diagnostics`/`last_has_error`,
+    /// applying the same sort/`--quiet` composition a full
+    /// [`crate::report::build_report`] pass does (see
+    /// [`crate::report::finish_report`]). Only the diagnostics themselves are cloned
+    /// here — proportional to how many there are, never to how many files exist —
+    /// which is the point of keeping a persistent per-file map across cycles.
+    fn compose_from_map(&mut self) {
+        let report = finish_report(
+            self.diagnostics_map.values().flatten().cloned(),
+            &ReportOptions {
+                report_unresolved: self.report_unresolved,
+                quiet: self.quiet,
+            },
+        );
+        self.last_diagnostics = report.diagnostics;
+        self.last_has_error = report.has_error;
+    }
+}
+
+/// A changed file's export surface for [`WatchSession::run_fast_cycle`]'s
+/// span-insensitive diff (PLAN.md §7): exported name -> access, plus the
+/// `star_exports` specifier list (order-sensitive — reordering two `export * from`
+/// statements can change which one wins a name collision, so any difference here
+/// counts as a surface change). Spans are deliberately excluded.
+#[derive(PartialEq, Eq)]
+struct ExportSurface {
+    export_table: HashMap<CompactStr, Option<Access>>,
+    star_exports: Vec<CompactStr>,
+}
+
+fn export_surface(info: &FileModuleInfo) -> ExportSurface {
+    ExportSurface {
+        export_table: info
+            .export_table
+            .iter()
+            .map(|(name, export)| (name.clone(), export.access))
+            .collect(),
+        star_exports: info.star_exports.clone(),
+    }
+}
+
+/// Extend `dirty` with every file whose one-hop lookup can observe `start`'s export
+/// surface: `start`'s own direct importers, plus — recursively, cycle-guarded — the
+/// importers of every barrel that `export * from start` (and, transitively, every
+/// barrel that itself gets star-exported by another barrel). A bare `export *`
+/// statement is never itself a checked entry (there's no name to check against), so
+/// the barrel itself doesn't need rechecking — only files that resolve a *name*
+/// through it do (PLAN.md §7's dirty-set definition).
+fn propagate_star_closure(graph: &ModuleGraph, start: &Path, dirty: &mut HashSet<PathBuf>) {
+    let mut visited_barrels: HashSet<PathBuf> = HashSet::new();
+    let mut stack: Vec<PathBuf> = vec![start.to_path_buf()];
+    while let Some(file) = stack.pop() {
+        if let Some(direct_importers) = graph.importers.get(&file) {
+            dirty.extend(direct_importers.iter().cloned());
+        }
+        if let Some(barrels) = graph.star_importers.get(&file) {
+            for barrel in barrels {
+                if visited_barrels.insert(barrel.clone()) {
+                    stack.push(barrel.clone());
+                }
+            }
         }
     }
 }
