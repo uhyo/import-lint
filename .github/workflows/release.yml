@@ -306,6 +306,14 @@ jobs:
               # --provenance is automatic under trusted publishing, but kept
               # explicit so a silent fallback to any other auth path can
               # never publish without an attestation.
-              npm publish "$dir" --provenance --access public
+              #
+              # The leading "./" on the path is load-bearing: without it, a
+              # single-slash arg like "npm/import-lint" is parsed by `npm
+              # publish` as a GitHub `owner/repo` shorthand (fetch-and-publish
+              # a remote repo), not a local directory — this broke a real
+              # release. The platform dirs (two slashes, e.g.
+              # "npm/platform/win32-x64") were never affected, only the main
+              # package's single-slash path.
+              npm publish "./$dir" --provenance --access public
             fi
           done

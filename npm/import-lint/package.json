@@ -1,5 +1,5 @@
 {
-  "name": "import-lint",
+  "name": "@import-lint/cli",
   "version": "0.0.0",
   "description": "A fast standalone linter enforcing JSDoc @package/@private import access rules in TypeScript/JavaScript projects (a port of eslint-plugin-import-access)",
   "keywords": [

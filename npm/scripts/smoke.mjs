@@ -160,6 +160,17 @@ function main() {
       console.log(`smoke.mjs: assembled ${assembled.join(", ")} at version ${DEV_VERSION}`);
     }
 
+    // The main package's npm name (docs/PLAN.md P1: renamed to
+    // `@import-lint/cli` after the unscoped `import-lint` name was rejected
+    // by the registry's typosquat-similarity check against `importlint`) —
+    // read from the tree rather than hardcoded so this script doesn't drift
+    // if the name changes again. The checked-in directory stays
+    // `npm/import-lint/` regardless of the package's `name` field.
+    const mainPkgJson = JSON.parse(
+      fs.readFileSync(path.join(tmpNpmRoot, "import-lint", "package.json"), "utf8"),
+    );
+    const mainPkgName = mainPkgJson.name;
+
     // 3. npm pack the main package and the host platform package.
     log("npm pack");
     const packsDir = path.join(baseTmp, "packs");
@@ -183,7 +194,7 @@ function main() {
           version: "0.0.0",
           private: true,
           dependencies: {
-            "import-lint": `file:${mainTarball}`,
+            [mainPkgName]: `file:${mainTarball}`,
           },
           overrides: {
             [`@import-lint/${hostKey}`]: `file:${platformTarball}`,
@@ -198,7 +209,16 @@ function main() {
       stdio: "inherit",
     });
 
-    const shimPath = path.join(projectDir, "node_modules", "import-lint", "bin", "import-lint.js");
+    // `mainPkgName` may be scoped (e.g. `@import-lint/cli`), which npm
+    // installs at `node_modules/@import-lint/cli`, not a single flat
+    // directory — splitting on "/" handles both scoped and unscoped names.
+    const shimPath = path.join(
+      projectDir,
+      "node_modules",
+      ...mainPkgName.split("/"),
+      "bin",
+      "import-lint.js",
+    );
     if (!fs.existsSync(shimPath)) {
       throw new Error(`smoke.mjs: expected installed shim at "${shimPath}", not found`);
     }

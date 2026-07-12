@@ -1,4 +1,4 @@
-# import-lint
+# @import-lint/cli
 
 A fast standalone linter enforcing JSDoc `@public`/`@package`/`@private` import
 access rules in TypeScript/JavaScript projects — a drop-in replacement for
@@ -12,8 +12,11 @@ prebuilt native binary for your platform (installed automatically via
 ## Install
 
 ```sh
-npm install -D import-lint
+npm install -D @import-lint/cli
 ```
+
+The package is named `@import-lint/cli`, but the installed command is still
+`import-lint` (see Quickstart below).
 
 ## Quickstart
 

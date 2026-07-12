@@ -7,9 +7,10 @@ just by path) — plus prebuilt binaries attached to a GitHub Release, built by
 dev-only fixture generator and is never published (`publish = false`).
 
 The same tag push also assembles, smoke-tests (on ubuntu/macos/windows), and
-publishes the seven npm packages (`import-lint` plus the six `@import-lint/*`
-platform packages, docs/PLAN.md §2) with provenance — see "npm distribution
-(one-time setup)" below for the setup this requires before the first npm release.
+publishes the seven npm packages (`@import-lint/cli` plus the six
+`@import-lint/*` platform packages, docs/PLAN.md §2) with provenance — see
+"npm distribution (one-time setup)" below for the setup this requires before
+the first npm release.
 
 ## Runbook (v0.1.0)
 
@@ -105,10 +106,13 @@ release is bootstrapped manually.
 
    # Platform packages first, main package last (docs/PLAN.md P5) — the main
    # package must never be live while a platform package it pins is missing.
-   for dir in npm/platform/darwin-arm64 npm/platform/darwin-x64 \
-              npm/platform/linux-arm64-gnu npm/platform/linux-x64-gnu \
-              npm/platform/linux-x64-musl npm/platform/win32-x64 \
-              npm/import-lint; do
+   # The leading "./" on each path is load-bearing: without it, `npm
+   # publish` parses a single-slash argument like "npm/import-lint" as a
+   # GitHub `owner/repo` shorthand instead of a local directory.
+   for dir in ./npm/platform/darwin-arm64 ./npm/platform/darwin-x64 \
+              ./npm/platform/linux-arm64-gnu ./npm/platform/linux-x64-gnu \
+              ./npm/platform/linux-x64-musl ./npm/platform/win32-x64 \
+              ./npm/import-lint; do
      npm publish "$dir" --access public
    done
    ```
@@ -134,7 +138,7 @@ release is bootstrapped manually.
    for pkg in @import-lint/darwin-arm64 @import-lint/darwin-x64 \
               @import-lint/linux-arm64-gnu @import-lint/linux-x64-gnu \
               @import-lint/linux-x64-musl @import-lint/win32-x64 \
-              import-lint; do
+              @import-lint/cli; do
      npm trust github "$pkg" --file release.yml --repo uhyo/import-lint \
        --allow-publish -y
      sleep 2

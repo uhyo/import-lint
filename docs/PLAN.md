@@ -2,17 +2,17 @@
 
 ImportLint v0.1.0 shipped as a Rust CLI (crates.io: `import-lint` / `import-lint-core`;
 prebuilt binaries on GitHub Releases via `.github/workflows/release.yml`). Its users,
-however, live in the JS/TS ecosystem: they expect `npm install -D import-lint` and
-`npx import-lint`, wired into `package.json` scripts and CI alongside their other
-tooling. This plan adds first-class npm distribution.
+however, live in the JS/TS ecosystem: they expect `npm install -D @import-lint/cli`
+and `npx import-lint`, wired into `package.json` scripts and CI alongside their
+other tooling. This plan adds first-class npm distribution.
 
 The completed v1 implementation plan (M0–M7) is archived at
 [`docs/PLAN-v1.md`](./PLAN-v1.md); this document only covers the npm packages.
 
-**Goal:** `npm install -D import-lint && npx import-lint` works on every supported
-platform with no compilation, no network access beyond the npm registry, and no
-install scripts — and the npm version always corresponds exactly to the crates.io /
-GitHub Release version.
+**Goal:** `npm install -D @import-lint/cli && npx import-lint` works on every
+supported platform with no compilation, no network access beyond the npm registry,
+and no install scripts — and the npm version always corresponds exactly to the
+crates.io / GitHub Release version.
 
 ---
 
@@ -23,18 +23,33 @@ GitHub Release version.
 | P1 | Main npm package **`import-lint`** (verified unclaimed on the npm registry 2026-07-11); per-platform binary packages under a scoped org: **`@import-lint/linux-x64-gnu`**, **`@import-lint/linux-x64-musl`**, **`@import-lint/linux-arm64-gnu`**, **`@import-lint/darwin-x64`**, **`@import-lint/darwin-arm64`**, **`@import-lint/win32-x64`**. The `import-lint` npm org must be created once (runbook step) before first publish. | Matches the ecosystem convention (`@esbuild/*`, `@biomejs/cli-*`, `@rspack/binding-*`). A scope means six platform names can't be individually squatted and signals they're internal artifacts, not user-facing packages. Node-style `os-cpu-libc` naming (not Rust triples) because the resolving code speaks `process.platform`/`process.arch`. |
 | P2 | Distribution mechanism: **`optionalDependencies` + JS launcher shim** — each platform package declares `os`/`cpu` (and `libc` where applicable) so package managers install exactly the matching one; the main package's `bin` is a small CommonJS shim that locates the platform package via `require.resolve` and `spawnSync`s the real binary. **No postinstall download scripts.** | The esbuild/Biome pattern. Postinstall downloaders break under `--ignore-scripts` (common in security-conscious setups), offline mirrors, and registry proxies; optionalDependencies ride the normal npm install/cache/lockfile path. |
 | P3 | Supported targets = **exactly the six in `release.yml`**: `darwin-arm64`, `darwin-x64`, `linux-x64-gnu`, `linux-x64-musl`, `linux-arm64-gnu`, `win32-x64`. glibc-vs-musl on Linux is decided **in the shim at runtime** via `process.report.getReport().header.glibcVersionRuntime` (absent ⇒ musl), because the package-manager-side `libc` field is honored by pnpm and newer npm but not universally. Both Linux x64 packages carry the `libc` field anyway for managers that do honor it. | One source of truth for the target list (the release workflow). Runtime detection is what Biome/oxlint ship; it degrades gracefully where `libc` metadata is ignored (both variants installed, shim picks the right one). |
-| P4 | **npm version ≡ crate version**, always released together from the same `v*` tag. Platform packages are **exact-pinned** (`"@import-lint/linux-x64-gnu": "1.2.3"`, no `^`) in the main package's `optionalDependencies`. | A version skew between shim and binary is undebuggable in the field. Exact pins mean a lockfile-free `npx import-lint@x.y.z` is fully deterministic. |
+| P4 | **npm version ≡ crate version**, always released together from the same `v*` tag. Platform packages are **exact-pinned** (`"@import-lint/linux-x64-gnu": "1.2.3"`, no `^`) in the main package's `optionalDependencies`. | A version skew between shim and binary is undebuggable in the field. Exact pins mean a lockfile-free `npx @import-lint/cli@x.y.z` is fully deterministic. |
 | P5 | Publishing happens **only from CI**, as a new job in the existing `release.yml` (after the binary build matrix), authenticated with an `NPM_TOKEN` automation-token secret and **npm provenance** (`npm publish --provenance`, `id-token: write`). Publish order: six platform packages first, then the main package. A platform-package publish that fails mid-sequence is retried/resumed by re-running the job — the assemble step and publishes are idempotent (`npm publish` of an already-published version is treated as success by an explicit already-published check, not `|| true`). | The main package must never be live while a platform package it pins is missing. Provenance gives users a supply-chain attestation for free. Manual local npm publishing is a footgun (six packages, ordering, credentials) — CI is the only path. |
 | P6 | Package sources are **checked into the repo as real files** under `npm/` with version `0.0.0` placeholders; a zero-dependency Node script `npm/scripts/assemble.mjs` stamps the real version (from the tag) and copies each binary from the workflow artifacts into its package before publish. | Reviewable in PRs (no generated-at-publish-time package.json), diffable, and testable locally without CI. |
 | P7 | **`engines.node: ">=18"`**; the shim is plain CommonJS, no dependencies, no build step. | Node 18 is the oldest maintained LTS; CJS avoids ESM interop edge cases in the one file where compatibility matters most. |
 | P8 | Unsupported platforms and `--omit=optional` installs fail **at run time** with an actionable error (detected platform key, list of supported targets, `cargo install import-lint` and GitHub-Releases fallbacks) — never at install time. | Failing `npm install` for the whole project because one dev machine is exotic is hostile; the linter not running is discoverable exactly when relevant. |
 | P9 | The first npm release is the **next version bump** (e.g. v0.1.1) published via the normal tag flow — no retroactive npm publish of v0.1.0. | The v0.1.0 tag's workflow run predates the npm job; re-tagging published artifacts is more error-prone than a patch release. |
 
+> **Amendment (2026-07-12):** P1's unscoped main package name `import-lint` was
+> rejected by the npm registry at first-publish time — it trips the registry's
+> typosquat-similarity rule against the existing, unrelated package
+> `importlint`. The main package is renamed to **`@import-lint/cli`** (still
+> under the `@import-lint` scope, matching the Biome convention of a scoped
+> main package alongside scoped platform packages — cf. `@biomejs/biome`).
+> The six platform packages keep their names unchanged (already published at
+> 0.1.1). The checked-in directory stays `npm/import-lint/` — only the
+> `package.json` `name` field changed — to avoid churn in scripts/workflows
+> for no user-visible benefit. The installed binary/bin name is still
+> `import-lint` everywhere (`npm install -D @import-lint/cli && npx
+> import-lint`).
+
 ## 2. Package layout
 
 ```
 npm/
-├── import-lint/                    # the package users install
+├── import-lint/                    # the package users install (directory name kept
+│   │                               # for stability; package.json "name" is
+│   │                               # "@import-lint/cli" — see the P1 amendment above)
 │   ├── package.json                # name, bin, optionalDependencies (6, exact-pinned),
 │   │                               # engines, repository, license: MIT, files: ["bin/"]
 │   ├── README.md                   # npm-facing readme (quickstart + link to repo)
@@ -135,13 +150,13 @@ pushing the `v*` tag now also ships npm.
 publish with provenance + already-published skip), `RELEASING.md` one-time steps
 documented, org + `NPM_TOKEN` created by the maintainer. Exit: a `v0.1.x` tag ships
 crates.io (unchanged), GitHub Release binaries (unchanged), **and** the seven npm
-packages, with `npx import-lint@0.1.x --version` working on all three OSes.
+packages, with `npx @import-lint/cli@0.1.x --version` working on all three OSes.
 
 **N3 — Docs & adoption polish:** npm README (the package page is many users' first
 contact), root README install section leads with npm, migration guide updated to
-"replace `eslint-plugin-import-access` with `import-lint` in devDependencies",
-CI-usage recipe (GitHub Actions step using `--format github`). Exit: docs reviewed,
-v0.1.x announced.
+"replace `eslint-plugin-import-access` with `@import-lint/cli` in devDependencies
+(the installed command is still `import-lint`)", CI-usage recipe (GitHub Actions
+step using `--format github`). Exit: docs reviewed, v0.1.x announced.
 
 ## 8. Explicitly out of scope
 
