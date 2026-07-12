@@ -246,13 +246,25 @@ jobs:
     needs: [npm-assemble, npm-smoke, release]
     runs-on: ubuntu-latest
     permissions:
-      id-token: write # required for `npm publish --provenance`
+      id-token: write # OIDC trusted publishing + provenance
       contents: read
     steps:
+      # Auth is OIDC trusted publishing (no NPM_TOKEN): each package on
+      # npmjs.com is configured to trust this repo's release.yml (see
+      # docs/RELEASING.md). Two requirements are load-bearing here:
+      #   - npm >= 11.5.1, or the registry silently treats the client as
+      #     anonymous and publish fails with a misleading 404 — hence
+      #     Node 24 (bundles npm 11) plus an explicit npm upgrade;
+      #   - NODE_AUTH_TOKEN must be completely unset (even an empty string
+      #     makes npm use token auth instead of falling back to OIDC), so
+      #     the publish step deliberately has no `env:` block.
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
           registry-url: "https://registry.npmjs.org"
+
+      - name: Update npm (OIDC publish needs >= 11.5.1)
+        run: npm install -g npm@latest
 
       - name: Download assembled npm tree
         uses: actions/download-artifact@v4
@@ -263,8 +275,6 @@ jobs:
         run: tar -xf npm-packages.tar
 
       - name: Publish
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           set -euo pipefail
           VERSION="${GITHUB_REF_NAME#v}"
@@ -293,6 +303,9 @@ jobs:
             if npm view "${name}@${VERSION}" version >/dev/null 2>&1; then
               echo "skip: ${name}@${VERSION} already published"
             else
+              # --provenance is automatic under trusted publishing, but kept
+              # explicit so a silent fallback to any other auth path can
+              # never publish without an attestation.
               npm publish "$dir" --provenance --access public
             fi
           done
