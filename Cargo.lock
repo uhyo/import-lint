@@ -405,7 +405,7 @@ dependencies = [
 
 [[package]]
 name = "gen-fixture"
-version = "0.1.0"
+version = "0.1.1"
 
 [[package]]
 name = "getrandom"
@@ -507,7 +507,7 @@ dependencies = [
 
 [[package]]
 name = "import-lint"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "clap",
  "gen-fixture",
@@ -527,7 +527,7 @@ dependencies = [
 
 [[package]]
 name = "import-lint-core"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "criterion",
  "globset",
