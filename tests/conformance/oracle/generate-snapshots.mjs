@@ -6,7 +6,7 @@
 // dumps the resulting diagnostics as JSON snapshots under ../expected/.
 //
 // These snapshots are the ground truth that the Rust implementation is diffed
-// against (see docs/PLAN.md §9.1). See ../README.md for usage.
+// against (see docs/PLAN-v1.md §9.1). See ../README.md for usage.
 //
 // Usage:
 //   node generate-snapshots.mjs [path-to-reference-repo-checkout]

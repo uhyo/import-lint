@@ -38,9 +38,9 @@ jobs:
       - name: cargo build
         run: cargo build --workspace
 
-      # npm distribution shim tests (docs/PLAN.md §5) — plain `node --test`,
+      # npm distribution shim tests (docs/PLAN-npm.md §5) — plain `node --test`,
       # no deps, no Rust needed. Run once on the linux leg. Pinned to Node 18
-      # (the `engines.node` floor, docs/PLAN.md P7) to catch compat issues
+      # (the `engines.node` floor, docs/PLAN-npm.md P7) to catch compat issues
       # early. Shell-expanded file list (not a bare directory, which Node's
       # test runner mishandles on some versions; not a quoted glob, which
       # `node --test` only understands from Node 21).

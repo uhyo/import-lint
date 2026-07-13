@@ -1,5 +1,6 @@
 > **Archived (2026-07-11).** This is the completed v1 implementation plan (M0–M7, all shipped in v0.1.0).
-> The current plan is [docs/PLAN.md](./PLAN.md) (npm distribution).
+> It was succeeded by [docs/PLAN-npm.md](./PLAN-npm.md) (npm distribution, also
+> completed); the current plan is [docs/PLAN.md](./PLAN.md).
 
 # ImportLint — Implementation Plan
 

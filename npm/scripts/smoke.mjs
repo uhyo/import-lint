@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 "use strict";
 
-// End-to-end smoke test (docs/PLAN.md §5) for the npm distribution. Packs
+// End-to-end smoke test (docs/PLAN-npm.md §5) for the npm distribution. Packs
 // the main + host platform packages, installs them into a throwaway project
 // via npm `overrides` (so no registry fetch happens), then exercises the
 // installed `import-lint` CLI through the shim: `--version` and a real lint
@@ -20,7 +20,7 @@
 //     steps entirely and packs straight from `<dir>` (packing doesn't
 //     mutate the tree, so no temp copy is needed). This is the entry point
 //     release.yml's `npm-smoke` job calls on all three OSes, so local and CI
-//     runs can't drift (docs/PLAN.md §5).
+//     runs can't drift (docs/PLAN-npm.md §5).
 //
 // `--expect-version <x.y.z>` (either mode) additionally makes the
 // `--version` assertion exact — stdout must be `import-lint <x.y.z>` — which
@@ -160,7 +160,7 @@ function main() {
       console.log(`smoke.mjs: assembled ${assembled.join(", ")} at version ${DEV_VERSION}`);
     }
 
-    // The main package's npm name (docs/PLAN.md P1: renamed to
+    // The main package's npm name (docs/PLAN-npm.md P1: renamed to
     // `@import-lint/cli` after the unscoped `import-lint` name was rejected
     // by the registry's typosquat-similarity check against `importlint`) —
     // read from the tree rather than hardcoded so this script doesn't drift

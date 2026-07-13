@@ -18,7 +18,7 @@ jobs:
       matrix:
         include:
           # npm_key maps each Rust target to the Node-style os-cpu-libc key
-          # used by npm/platform/<key> (docs/PLAN.md P1/P3) — the resolving
+          # used by npm/platform/<key> (docs/PLAN-npm.md P1/P3) — the resolving
           # code (the npm shim) speaks process.platform/process.arch, not
           # Rust triples.
           - target: x86_64-unknown-linux-gnu
@@ -181,7 +181,7 @@ jobs:
           node npm/scripts/assemble.mjs --version "$VERSION" --dist npm-dist
           # assemble.mjs itself fails loudly (before writing anything) if any
           # of the six platform binaries is missing — a half-release must be
-          # impossible (docs/PLAN.md P5/P6).
+          # impossible (docs/PLAN-npm.md P5/P6).
 
       - name: Sanity-check assembled tree
         run: |
@@ -280,7 +280,7 @@ jobs:
           VERSION="${GITHUB_REF_NAME#v}"
 
           # Platform packages first, main package last — a locked product
-          # decision (docs/PLAN.md P5): the main package (which pins exact
+          # decision (docs/PLAN-npm.md P5): the main package (which pins exact
           # platform versions via optionalDependencies) must never be live
           # while a platform package it depends on is missing.
           PACKAGES=(
@@ -295,7 +295,7 @@ jobs:
 
           for dir in "${PACKAGES[@]}"; do
             name="$(node -p "require('./${dir}/package.json').name")"
-            # Idempotency (docs/PLAN.md P5): a re-run of this job (e.g. after
+            # Idempotency (docs/PLAN-npm.md P5): a re-run of this job (e.g. after
             # a mid-sequence failure) must be safe. Checking the registry
             # first — rather than `npm publish || true` — makes a *real*
             # publish failure (bad credentials, bad tarball, etc.) still

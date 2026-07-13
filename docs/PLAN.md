@@ -1,18 +1,19 @@
-# ImportLint — npm Distribution Plan
+# ImportLint — LSP Server & VS Code Extension Plan (M8)
 
-ImportLint v0.1.0 shipped as a Rust CLI (crates.io: `import-lint` / `import-lint-core`;
-prebuilt binaries on GitHub Releases via `.github/workflows/release.yml`). Its users,
-however, live in the JS/TS ecosystem: they expect `npm install -D @import-lint/cli`
-and `npx import-lint`, wired into `package.json` scripts and CI alongside their
-other tooling. This plan adds first-class npm distribution.
+ImportLint ships as a CLI (crates.io `import-lint`, npm `@import-lint/cli` + six
+platform packages, GitHub Release binaries). The CLI's watch mode already delivers
+~5ms incremental re-check cycles on 10k-file trees — but users see violations only
+in a terminal. This plan puts those diagnostics in the editor: an LSP server built
+into the existing binary, and a VS Code extension as the first (and reference)
+client.
 
-The completed v1 implementation plan (M0–M7) is archived at
-[`docs/PLAN-v1.md`](./PLAN-v1.md); this document only covers the npm packages.
+Earlier plans are archived at [`docs/PLAN-v1.md`](./PLAN-v1.md) (core linter,
+M0–M7) and [`docs/PLAN-npm.md`](./PLAN-npm.md) (npm distribution, N1–N3).
 
-**Goal:** `npm install -D @import-lint/cli && npx import-lint` works on every
-supported platform with no compilation, no network access beyond the npm registry,
-and no install scripts — and the npm version always corresponds exactly to the
-crates.io / GitHub Release version.
+**Goal:** open a TypeScript project with an `.importlintrc.jsonc`, see
+import-access violations as you type — including in files you *didn't* edit
+(cross-file invalidation is the whole point of this linter) — with zero extra
+installs beyond `npm install -D @import-lint/cli` and the extension itself.
 
 ---
 
@@ -20,148 +21,154 @@ crates.io / GitHub Release version.
 
 | # | Decision | Rationale |
 |---|---|---|
-| P1 | Main npm package **`import-lint`** (verified unclaimed on the npm registry 2026-07-11); per-platform binary packages under a scoped org: **`@import-lint/linux-x64-gnu`**, **`@import-lint/linux-x64-musl`**, **`@import-lint/linux-arm64-gnu`**, **`@import-lint/darwin-x64`**, **`@import-lint/darwin-arm64`**, **`@import-lint/win32-x64`**. The `import-lint` npm org must be created once (runbook step) before first publish. | Matches the ecosystem convention (`@esbuild/*`, `@biomejs/cli-*`, `@rspack/binding-*`). A scope means six platform names can't be individually squatted and signals they're internal artifacts, not user-facing packages. Node-style `os-cpu-libc` naming (not Rust triples) because the resolving code speaks `process.platform`/`process.arch`. |
-| P2 | Distribution mechanism: **`optionalDependencies` + JS launcher shim** — each platform package declares `os`/`cpu` (and `libc` where applicable) so package managers install exactly the matching one; the main package's `bin` is a small CommonJS shim that locates the platform package via `require.resolve` and `spawnSync`s the real binary. **No postinstall download scripts.** | The esbuild/Biome pattern. Postinstall downloaders break under `--ignore-scripts` (common in security-conscious setups), offline mirrors, and registry proxies; optionalDependencies ride the normal npm install/cache/lockfile path. |
-| P3 | Supported targets = **exactly the six in `release.yml`**: `darwin-arm64`, `darwin-x64`, `linux-x64-gnu`, `linux-x64-musl`, `linux-arm64-gnu`, `win32-x64`. glibc-vs-musl on Linux is decided **in the shim at runtime** via `process.report.getReport().header.glibcVersionRuntime` (absent ⇒ musl), because the package-manager-side `libc` field is honored by pnpm and newer npm but not universally. Both Linux x64 packages carry the `libc` field anyway for managers that do honor it. | One source of truth for the target list (the release workflow). Runtime detection is what Biome/oxlint ship; it degrades gracefully where `libc` metadata is ignored (both variants installed, shim picks the right one). |
-| P4 | **npm version ≡ crate version**, always released together from the same `v*` tag. Platform packages are **exact-pinned** (`"@import-lint/linux-x64-gnu": "1.2.3"`, no `^`) in the main package's `optionalDependencies`. | A version skew between shim and binary is undebuggable in the field. Exact pins mean a lockfile-free `npx @import-lint/cli@x.y.z` is fully deterministic. |
-| P5 | Publishing happens **only from CI**, as a new job in the existing `release.yml` (after the binary build matrix), authenticated with an `NPM_TOKEN` automation-token secret and **npm provenance** (`npm publish --provenance`, `id-token: write`). Publish order: six platform packages first, then the main package. A platform-package publish that fails mid-sequence is retried/resumed by re-running the job — the assemble step and publishes are idempotent (`npm publish` of an already-published version is treated as success by an explicit already-published check, not `|| true`). | The main package must never be live while a platform package it pins is missing. Provenance gives users a supply-chain attestation for free. Manual local npm publishing is a footgun (six packages, ordering, credentials) — CI is the only path. |
-| P6 | Package sources are **checked into the repo as real files** under `npm/` with version `0.0.0` placeholders; a zero-dependency Node script `npm/scripts/assemble.mjs` stamps the real version (from the tag) and copies each binary from the workflow artifacts into its package before publish. | Reviewable in PRs (no generated-at-publish-time package.json), diffable, and testable locally without CI. |
-| P7 | **`engines.node: ">=18"`**; the shim is plain CommonJS, no dependencies, no build step. | Node 18 is the oldest maintained LTS; CJS avoids ESM interop edge cases in the one file where compatibility matters most. |
-| P8 | Unsupported platforms and `--omit=optional` installs fail **at run time** with an actionable error (detected platform key, list of supported targets, `cargo install import-lint` and GitHub-Releases fallbacks) — never at install time. | Failing `npm install` for the whole project because one dev machine is exotic is hostile; the linter not running is discoverable exactly when relevant. |
-| P9 | The first npm release is the **next version bump** (e.g. v0.1.1) published via the normal tag flow — no retroactive npm publish of v0.1.0. | The v0.1.0 tag's workflow run predates the npm job; re-tagging published artifacts is more error-prone than a patch release. |
+| E1 | The LSP server ships **inside the existing `import-lint` binary** as a subcommand: **`import-lint lsp`** (stdio transport). No new crate, no new binary, no new packages. | Ruff's `ruff server` model. Reuses the entire crates.io/npm/GH-Release distribution as-is; the server version is automatically the project's linter version. Technically forced, too: the watch engine (`WatchSession`, `ExtractionCache`) lives in `crates/cli` behind `pub(crate)` — an in-crate `lsp/` module needs no visibility bumps or crate reorg. |
+| E2 | LSP library: **`lsp-server` + `lsp-types`** (rust-analyzer's stack), synchronous stdio main loop with `crossbeam_channel::select!`. | Our engine is synchronous (rayon inside); `lsp-server` is the only mainstream option with a plain sync API and is what Ruff/ty (same architecture) chose. No tokio dependency in the shipped binary. Known cost: `lsp-types` 0.97 is stale-but-functional (last publish 2024-06); we need nothing newer than LSP 3.16 features. Fallback if we ever need async: `tower-lsp-server` (the maintained community fork used by oxc/Biome). |
+| E3 | Diagnostics are **push-only** (`textDocument/publishDiagnostics`) and published for **all project files, not just open documents**. After every engine cycle, the server diffs the full diagnostic set against what it last published per file and (re)publishes changed files, sending empty arrays to clear. | The engine computes the whole project's diagnostics every cycle anyway (`run_cycle` returns the full set) — publish-all is free, and it's the product: editing `a.ts` can create a violation in closed `b.ts`, and the user must see it in the Problems panel. Biome republishes open docs only because its engine is per-file on-demand; ours isn't. Pull diagnostics (`textDocument/diagnostic`) adds capability negotiation for no benefit here. |
+| E4 | **Lint-as-you-type via buffer overlays**: every open text document's in-memory content overrides its on-disk content in extraction *and* in diagnostic line/col rendering. `didChange` is debounced (~200ms) and mapped to the existing incremental fast path. A **`importLint.run`: `"onType"` (default) \| `"onSave"`** setting (oxc precedent) lets users opt out of keystroke linting. | The seams already exist: core `extract()` takes `source_text: &str` (never touches disk), and `WatchSession::run_cycle(&[ChangeKind])` was designed notify-free. The overlay must cover **all** open documents, not just the one that changed — otherwise a file importing another unsaved buffer resolves against stale disk content. |
+| E5 | Position encoding: **UTF-16 only** in v1 (the LSP default; no `positionEncoding` negotiation). | `line_col()` already emits UTF-16 code-unit columns (ESLint convention) — LSP conversion is literally subtracting 1 from line and column. Negotiating UTF-8 à la Biome is a later micro-optimization. |
+| E6 | VS Code extension: **one universal `.vsix`, no bundled binary, no downloads**. Binary resolution order: (1) `importLint.binaryPath` setting; (2) workspace `node_modules` — resolve `@import-lint/cli/package.json`, then the `@import-lint/<platform-key>` binary package (same key computation as the npm shim, incl. musl detection); (3) `PATH`. If nothing is found, show one actionable notification (install instructions), don't error-loop. | The Biome/oxc locator model, and the payoff of the npm milestone: projects that installed `@import-lint/cli` get a version-matched server with zero config. Bundling binaries (Ruff model) would mean 6+ platform-specific vsix builds per release for no gain. |
+| E7 | The extension lives **in-repo at `editors/vscode/`** (TypeScript, `vscode-languageclient`, esbuild bundle) and is released **independently of the linter** via **`vscode-v*` tags** publishing to **VS Code Marketplace + Open VSX** from CI. | Monorepo keeps extension and server protocol changes in one PR; oxc/Biome/Ruff use separate repos but we don't have their scale. The extension is a thin client that runs whatever binary the workspace has — its version line is decoupled from linter releases by design, so lockstep `v*` tagging would force empty releases. Open VSX covers Cursor/VSCodium/Windsurf users. |
+| E8 | Config/tsconfig changes: the server registers `workspace/didChangeWatchedFiles` (dynamic registration) for `.importlintrc.json{,c}` and the configured tsconfig, mapping them to the existing `ChangeKind::ConfigChanged`/`TsconfigChanged` hot-reload path. Escape hatch: **`importLint.restart`** command. | Watch mode's config hot-reload (re-load, full re-check, non-fatal on parse error) comes for free through `run_cycle`; the LSP client's file watcher replaces `notify`, which also sidesteps the WSL2 watcher problems entirely. |
+| E9 | The extension **starts the server only when a config file is present** in the workspace (`importLint.enabled`: `"auto"` (default) \| `"on"` \| `"off"`). | Activating in every JS/TS project and linting with implicit defaults would surprise users who never opted in. `"on"` covers zero-config users who want defaults. |
+| E10 | v1 scope is **diagnostics only**: no code actions/quick fixes, no hover, single workspace folder (first root wins; log a warning for multi-root). | Ship the vertical slice. Quick fixes (e.g. "annotate with `@public`") and multi-root need design of their own and nothing in v1 forecloses them. |
 
-> **Amendment (2026-07-12):** P1's unscoped main package name `import-lint` was
-> rejected by the npm registry at first-publish time — it trips the registry's
-> typosquat-similarity rule against the existing, unrelated package
-> `importlint`. The main package is renamed to **`@import-lint/cli`** (still
-> under the `@import-lint` scope, matching the Biome convention of a scoped
-> main package alongside scoped platform packages — cf. `@biomejs/biome`).
-> The six platform packages keep their names unchanged (already published at
-> 0.1.1). The checked-in directory stays `npm/import-lint/` — only the
-> `package.json` `name` field changed — to avoid churn in scripts/workflows
-> for no user-visible benefit. The installed binary/bin name is still
-> `import-lint` everywhere (`npm install -D @import-lint/cli && npx
-> import-lint`).
-
-## 2. Package layout
+## 2. Server architecture (`crates/cli/src/lsp/`)
 
 ```
-npm/
-├── import-lint/                    # the package users install (directory name kept
-│   │                               # for stability; package.json "name" is
-│   │                               # "@import-lint/cli" — see the P1 amendment above)
-│   ├── package.json                # name, bin, optionalDependencies (6, exact-pinned),
-│   │                               # engines, repository, license: MIT, files: ["bin/"]
-│   ├── README.md                   # npm-facing readme (quickstart + link to repo)
-│   └── bin/
-│       └── import-lint.js          # the launcher shim (CJS, zero deps, #!/usr/bin/env node)
-├── platform/
-│   ├── linux-x64-gnu/package.json  # { name: "@import-lint/linux-x64-gnu",
-│   │                               #   os: ["linux"], cpu: ["x64"], libc: ["glibc"],
-│   │                               #   files: ["import-lint"] }
-│   ├── linux-x64-musl/…            # libc: ["musl"]
-│   ├── linux-arm64-gnu/…           # os linux, cpu arm64, libc glibc
-│   ├── darwin-x64/…                # os darwin, cpu x64
-│   ├── darwin-arm64/…              # os darwin, cpu arm64
-│   └── win32-x64/…                 # os win32, cpu x64; binary is import-lint.exe
-└── scripts/
-    ├── assemble.mjs                # stamp version + copy binaries from a dist/ dir
-    └── smoke.mjs                   # pack + install + run in a temp dir (used locally & in CI)
+import-lint lsp            # new clap subcommand, stdio only
+└── main loop (lsp_server::Connection::stdio + crossbeam select!)
+    ├── initialize: capabilities = { textDocumentSync: FULL, ... }, serverInfo
+    ├── initialized: register didChangeWatchedFiles for config/tsconfig
+    ├── didOpen(uri, text)    → set_overlay(path, text) + schedule cycle
+    ├── didChange(uri, text)  → set_overlay(path, text) + debounce → cycle
+    ├── didSave(uri)          → cycle now (flushes debounce)
+    ├── didClose(uri)         → clear_overlay(path) + cycle (disk is truth again)
+    ├── didChangeWatchedFiles → ChangeKind::{ConfigChanged,TsconfigChanged,Structural}
+    └── cycle = WatchSession::run_cycle(&changes)
+                → diff full diagnostic set vs published_map
+                → publishDiagnostics per changed file (empty array to clear)
 ```
 
-Each platform package contains exactly its `package.json`, a one-line README, and (after
-assembly) the binary at package root. The binary file name is `import-lint`
-(`import-lint.exe` on Windows) — the shim resolves
-`@import-lint/<key>/import-lint<ext>`.
+Notes:
 
-## 3. The launcher shim
+- **Text sync is FULL**, not incremental — the engine re-extracts a changed file
+  wholesale anyway (~47µs), so incremental sync would only save protocol bytes.
+- **Debounce** is a `select!` timeout arm, no extra thread: pending `ContentEdit`s
+  accumulate and flush after 200ms of quiet (or immediately on save / config
+  change). `run_cycle` already batches multiple changed paths per cycle.
+- The **workspace root** (first workspace folder) is the server's `cwd` for
+  config discovery — same semantics as running the CLI in the project root.
+- **Untitled documents** (no file path) and files outside the project are
+  ignored: no overlay, no diagnostics.
+- The server never touches `notify`: the LSP client watches the config files
+  (E8) and open buffers arrive as protocol events. Files changed *outside* the
+  editor (e.g. `git pull`) are picked up on the next cycle only if a watched
+  event fires — v1 accepts this (documented); a low-frequency full-recheck
+  timer can be added later if it bites.
 
-Behavior of `npm/import-lint/bin/import-lint.js`:
+## 3. Engine changes: buffer overlays (in `crates/cli`)
 
-1. Compute the platform key: `process.platform`-`process.arch`, plus `-gnu`/`-musl` on
-   Linux via the `process.report` glibc probe (fallback: `fs.existsSync`-probe for
-   `/etc/alpine-release` ⇒ musl) .
-2. Env override **`IMPORT_LINT_BINARY`**: if set, skip resolution and run that path
-   (debugging aid, also used by the smoke script before publish).
-3. `require.resolve("@import-lint/<key>/import-lint<ext>")` — on failure, print the P8
-   error to stderr and exit 2 (matching the CLI's "usage/internal error" exit-code
-   contract).
-4. `child_process.spawnSync(binPath, process.argv.slice(2), { stdio: "inherit" })`,
-   then mirror the child: `process.exit(status)`; if terminated by a signal, re-raise
-   it (`process.kill(process.pid, signal)`).
+Core `extract()` needs no changes (it already takes `&str`). The work:
 
-Notably absent: no update checks, no telemetry, no config — the shim is a dumb exec
-forwarder and must stay that way (it runs on every lint invocation).
+- **`WatchSession` gains overlay methods** — `set_overlay(path, content)`,
+  `clear_overlay(path)` — since the runner internals are `pub(crate)` and must
+  stay behind its API. Overlay entries carry a **monotonic version counter**.
+- **`runner.rs`**: `extract_one()`/`extract_with_cache()` consult the overlay map
+  before `fs::read_to_string`; for overlaid files the mtime/size `ExtractionCache`
+  validity key is replaced by the overlay version (stat-based caching assumes
+  "disk is truth" — the one place needing real design care, see risk R1).
+- **`report.rs`**: `read_cached()` (line/col rendering) must read the same
+  overlay content, or diagnostic positions would be computed against stale disk
+  text while spans came from the buffer.
+- `clear_overlay` re-dirties the file so the next cycle re-extracts from disk.
 
-## 4. CI: extending `release.yml`
+Non-goal: overlays in the CLI watch mode or one-shot lint — the API exists on
+`WatchSession`, but only the LSP populates it.
 
-New jobs after the existing build matrix (which already uploads per-target artifacts):
+## 4. VS Code extension (`editors/vscode/`)
 
-1. **`npm-assemble`** (ubuntu): download all six binary artifacts → `node
-   npm/scripts/assemble.mjs --version ${TAG#v} --dist <artifacts-dir>` → verify every
-   package dir now contains its binary and the stamped version → upload the seven
-   assembled package dirs as one artifact. Fails if any binary is missing (a
-   half-release must be impossible).
-2. **`npm-smoke`** (matrix: ubuntu, macos, windows): download assembled packages, `npm
-   pack` each, then in a temp project `npm install` the main tarball plus the local
-   platform tarballs (`overrides` pointing the scoped names at the `.tgz` files so no
-   registry fetch occurs), run `npx import-lint --version` (assert tag version) and
-   lint a two-file fixture with a `@package` violation (assert exit 1 and the expected
-   diagnostic on stdout). This exercises the real shim → binary path on all three OSes
-   pre-publish.
-3. **`npm-publish`** (needs: assemble + smoke + the GitHub-release job; `environment`-
-   gated if we want a manual approval click later): for each platform package then the
-   main package, check the registry for name@version first (skip if present — makes
-   re-runs safe), else `npm publish --provenance --access public`.
-
-`RELEASING.md` gains two one-time steps (create the `import-lint` npm org; add the
-`NPM_TOKEN` automation token as a repo secret) — the per-release runbook is unchanged:
-pushing the `v*` tag now also ships npm.
+- **Stack**: TypeScript, `vscode-languageclient` (v9+), esbuild single-file
+  bundle, `@vscode/vsce` for packaging. Extension name `ImportLint`; publisher
+  account is a one-time runbook step (reserve `uhyo` or `import-lint`).
+- **Activation**: `onLanguage:{typescript,typescriptreact,javascript,javascriptreact}`
+  + `workspaceContains:**/.importlintrc.{json,jsonc}`; the E9 `enabled` gate then
+  decides whether to actually spawn the server.
+- **Settings**: `importLint.binaryPath` (E6), `importLint.run` (E4),
+  `importLint.enabled` (E9), `importLint.trace.server` (languageclient standard).
+- **Commands**: `importLint.restart` (stop client, re-locate binary, restart —
+  also the recovery path after `npm install` swaps the binary version).
+- **Locator** is a small pure module (input: workspace root, platform, settings;
+  output: binary path or a structured "not found" reason) so it's unit-testable
+  with `node --test`, mirroring the npm shim's testing approach. Reuse the shim's
+  platform-key logic (glibc/musl probe) rather than reimplementing it.
+- WSL2 note (dev environment): under VS Code Remote-WSL the extension runs in
+  the WSL extension host, so `node_modules` resolution and binary spawn are
+  native-Linux — no special handling.
 
 ## 5. Testing strategy
 
-- **Shim unit-ish tests** (plain `node --test` in `npm/import-lint/test/`, run by CI's
-  normal test job, no Rust needed): platform-key computation (mock `process` values),
-  the P8 error path (unresolvable package ⇒ exit 2 + helpful stderr), env override.
-- **`npm/scripts/smoke.mjs`** runs the full local loop on the developer's host target:
-  `cargo build --release` → assemble just the host package with a dev version → pack →
-  temp-dir install → `--version` + violation-fixture checks. Wired as the entry point
-  the CI `npm-smoke` job shares, so local and CI runs can't drift.
-- CI smoke on all three OS runners per release tag (see §4) is the release gate.
+- **Overlay engine tests** (`crates/cli/tests/watch.rs` + unit tests): overlay
+  set/edit/clear cycles, cache-invalidation edges (overlay hides disk edit;
+  clear falls back to disk; version bump forces re-extract), cross-file case
+  (open unsaved `b.ts` re-export change flips a diagnostic in `a.ts`).
+- **LSP protocol tests** (`crates/cli/tests/lsp.rs`): drive the real server loop
+  over `lsp_server::Connection::memory()` — initialize handshake, didOpen →
+  publishDiagnostics, didChange with a violation-introducing edit → diagnostics
+  appear for a *different* file, didClose → reverts to disk state, config-change
+  → republish, clearing semantics (empty array). No editor needed; runs in CI on
+  all three OSes via the normal test job.
+- **Extension**: locator unit tests (`node --test`); a smoke test with
+  `@vscode/test-electron` is stretch goal, not a gate — the protocol tests
+  above cover the server, and the extension is deliberately thin.
+- **Manual gate before first publish**: install the vsix locally, verify
+  end-to-end on the dev machine (WSL2) against a real project.
 
 ## 6. Risks and mitigations
 
-| Risk | Impact | Mitigation |
-|---|---|---|
-| npm org name `import-lint` unavailable | Blocked scoped naming | Verify at org-creation time (first runbook step, before anything is published); fallback: `@importlint/*` scope — only the shim's resolve strings and package names change. |
-| libc misdetection (containers, static Node, FreeBSD-linuxulator oddities) | Wrong/no binary picked | `process.report` probe + alpine fallback + `IMPORT_LINT_BINARY` escape hatch + P8's actionable error naming the computed key. |
-| Package manager ignores `os`/`cpu`/`libc` and installs all six | Wasted disk, not broken | Accepted: shim picks correctly regardless. Document pnpm's `supportedArchitectures` for mono-arch installs. |
-| `--omit=optional` / `--no-optional` installs | Shim has no binary | P8 runtime error explains exactly what happened and how to fix it. |
-| Partial publish (some platform packages live, main missing or vice versa) | Broken installs for a version | Strict publish order (P5), idempotent re-runs, smoke gate before any publish. |
-| Windows shim quirks (`spawnSync` + `.exe`, path spaces) | Broken on Windows | Direct `spawnSync` of the resolved absolute `.exe` path (no shell), covered by the windows leg of `npm-smoke`. |
+| # | Risk | Impact | Mitigation |
+|---|---|---|---|
+| R1 | Overlay vs `ExtractionCache` invalidation bug (stale cache hit ⇒ edits silently ignored; over-invalidation ⇒ keystroke thrash) | Wrong diagnostics or lag | Version-counter design in §3, dedicated cache-edge tests in §5; the fast path already re-extracts only changed files, bounding thrash. |
+| R2 | `lsp-types` staleness blocks a needed protocol feature | Feature stall | We use only LSP 3.16-era features (publishDiagnostics, watched files, dynamic registration). If it ever binds, switch to `tower-lsp-server`'s vendored types — server logic is behind our own module boundary. |
+| R3 | Publish-all floods the Problems panel in huge repos | UX noise | It mirrors what the CLI prints today, so it's consistent; if reports demand it, add `importLint.reportClosedFiles: false` later — the diff/publish layer makes that a filter, not a redesign. |
+| R4 | Marketplace auth churn (global Azure DevOps PATs retire Dec 2026) | CI publish breaks | Use a publisher-scoped Marketplace PAT now; note the Entra-ID migration in RELEASING.md so it's a known follow-up, not a surprise. |
+| R5 | Binary/extension version skew (old CLI in node_modules lacks `lsp` subcommand) | Confusing startup failure | Extension runs `import-lint --version` at locate time; if the binary predates the LSP (< the L2 release version), show one clear "upgrade @import-lint/cli" notification instead of spawning. |
+| R6 | Multi-root workspaces silently mislint | Wrong project root | E10: first root wins + explicit warning notification when more roots exist; documented limitation. |
 
 ## 7. Milestones
 
-**N1 — Wrapper packages + shim (local):** `npm/` tree as in §2, shim per §3,
-`assemble.mjs` + `smoke.mjs`, shim tests green, local smoke green on the dev machine
-(linux-x64-gnu). Exit: `npm/scripts/smoke.mjs` passes locally end-to-end.
+**L1 — Buffer overlays in the engine:** §3 complete (`WatchSession`
+overlay API, runner/report plumbing, version-keyed cache bypass), overlay tests
+green, zero behavior change when no overlays are set (existing 158+ tests
+untouched). Exit: cross-file overlay test passes — an unsaved edit in one buffer
+moves a diagnostic in another file.
 
-**N2 — CI publish pipeline:** §4 jobs in `release.yml` (assemble → 3-OS smoke →
-publish with provenance + already-published skip), `RELEASING.md` one-time steps
-documented, org + `NPM_TOKEN` created by the maintainer. Exit: a `v0.1.x` tag ships
-crates.io (unchanged), GitHub Release binaries (unchanged), **and** the seven npm
-packages, with `npx @import-lint/cli@0.1.x --version` working on all three OSes.
+**L2 — `import-lint lsp` server:** §2 complete behind a new clap subcommand;
+protocol integration tests per §5 green on Linux/macOS/Windows CI. Exit: a
+generic LSP client (protocol tests + a manual neovim or VS Code smoke) gets
+live cross-file diagnostics with overlays, config hot-reload, and clean
+publish/clear behavior.
 
-**N3 — Docs & adoption polish:** npm README (the package page is many users' first
-contact), root README install section leads with npm, migration guide updated to
-"replace `eslint-plugin-import-access` with `@import-lint/cli` in devDependencies
-(the installed command is still `import-lint`)", CI-usage recipe (GitHub Actions
-step using `--format github`). Exit: docs reviewed, v0.1.x announced.
+**L3 — VS Code extension:** `editors/vscode/` per §4 — locator + client wiring
++ settings + restart command, packaged vsix installs and works end-to-end
+locally (WSL2 manual gate). Exit: fresh project + `npm install -D
+@import-lint/cli` + local vsix ⇒ squiggles on violations as you type.
+
+**L4 — Publish & docs:** extension CI (lint/build/test in `ci.yml`),
+`vscode-release.yml` on `vscode-v*` tags (vsce + ovsx, `--skip-duplicate`),
+one-time runbook steps in RELEASING.md (Marketplace publisher + scoped PAT,
+Open VSX namespace + Eclipse agreement), root README "Editor integration"
+section + npm README pointer. Exit: extension live on Marketplace and Open VSX,
+installable by name, docs updated.
 
 ## 8. Explicitly out of scope
 
-- Native Node bindings (napi-rs) — the CLI boundary is sufficient until an
-  LSP/editor-integration milestone (v1 plan's M8) demands in-process calls.
-- Bun-/Deno-specific packages (both consume the npm packages as-is).
-- Self-update, version checks, or any network activity in the shim.
-- Publishing v0.1.0 retroactively to npm (P9).
+- Code actions / quick fixes (e.g. "add `@public`"), hover, go-to-definition —
+  future milestone once diagnostics are stable.
+- Pull diagnostics, UTF-8/UTF-32 position-encoding negotiation (E5).
+- Multi-root workspace support beyond first-root-wins (E10).
+- Editor plugins beyond VS Code — the LSP server is editor-agnostic and a
+  README snippet for neovim/helix config is docs work, not a plugin.
+- Native Node bindings (napi-rs) — the process boundary + LSP is the
+  integration surface.
+- JUnit output and opt-in strict checks (`export *`/dynamic import/require) —
+  separate post-v1 ideas, not part of M8.

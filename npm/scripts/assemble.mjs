@@ -3,7 +3,7 @@
 
 // Zero-dependency, Node 18+ compatible. Stamps the real release version into
 // the seven checked-in package.jsons under npm/ and copies each target's
-// binary into its platform package (docs/PLAN.md §2, P6).
+// binary into its platform package (docs/PLAN-npm.md §2, P6).
 //
 // Usage:
 //   node assemble.mjs --version <x.y.z> --dist <dir> [--only <platform-key>] [--npm-root <dir>]
@@ -22,7 +22,7 @@
 //
 // Fails loudly and does nothing (no partial stamp, no partial copy) if any
 // binary required for this run is missing — a half-release must be
-// impossible (docs/PLAN.md P5).
+// impossible (docs/PLAN-npm.md P5).
 
 import fs from "node:fs";
 import path from "node:path";

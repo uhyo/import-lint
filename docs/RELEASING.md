@@ -8,7 +8,7 @@ dev-only fixture generator and is never published (`publish = false`).
 
 The same tag push also assembles, smoke-tests (on ubuntu/macos/windows), and
 publishes the seven npm packages (`@import-lint/cli` plus the six
-`@import-lint/*` platform packages, docs/PLAN.md §2) with provenance — see
+`@import-lint/*` platform packages, docs/PLAN-npm.md §2) with provenance — see
 "npm distribution (one-time setup)" below for the setup this requires before
 the first npm release.
 
@@ -60,7 +60,7 @@ For every release after v0.1.0:
    `import-lint-core = { path = "../core", version = "..." }` requirement in
    `crates/cli/Cargo.toml`, which needs bumping to match if it's pinned to an
    exact version rather than a compatible range. This is also what keeps the
-   npm version equal to the crate version (docs/PLAN.md P4): `assemble.mjs`
+   npm version equal to the crate version (docs/PLAN-npm.md P4): `assemble.mjs`
    stamps the npm packages with the pushed tag's version, while the CLI binary
    reports its compiled-in `CARGO_PKG_VERSION` (from this same bump) at
    `--version` — the `npm-smoke` CI job asserts the two match, so an unbumped
@@ -88,8 +88,8 @@ release is bootstrapped manually.
 
 1. **Create the npm org `import-lint`** (https://www.npmjs.com/org/create). It's
    needed for the six scoped platform packages, `@import-lint/<platform>`
-   (docs/PLAN.md P1). Verify the org name is still available at creation time;
-   if it's been taken, fall back to the `@importlint` scope (docs/PLAN.md §6) —
+   (docs/PLAN-npm.md P1). Verify the org name is still available at creation time;
+   if it's been taken, fall back to the `@importlint` scope (docs/PLAN-npm.md §6) —
    only the shim's resolve strings and the package names change.
    *(Done 2026-07-12.)*
 
@@ -104,7 +104,7 @@ release is bootstrapped manually.
                                                         # binaries' exec bits
    npm login   # interactive, 2FA
 
-   # Platform packages first, main package last (docs/PLAN.md P5) — the main
+   # Platform packages first, main package last (docs/PLAN-npm.md P5) — the main
    # package must never be live while a platform package it pins is missing.
    # The leading "./" on each path is load-bearing: without it, `npm
    # publish` parses a single-slash argument like "npm/import-lint" as a

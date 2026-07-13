@@ -16,7 +16,7 @@ name = "gen-fixture"
 path = "src/main.rs"
 
 # Intentionally zero dependencies (not even `clap`/`rand`): this is a dev-only
-# fixture generator (PLAN.md §8), not part of the shipped `import-lint` binary or
+# fixture generator (PLAN-v1.md §8), not part of the shipped `import-lint` binary or
 # the `import_lint` library, so it doesn't affect the product's dependency graph.
 # CLI args are parsed by hand; randomness comes from a tiny inline LCG (see
 # `src/lib.rs`'s `Lcg`) — deterministic and dependency-free.
