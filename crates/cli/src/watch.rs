@@ -23,6 +23,7 @@ use oxc_allocator::AllocatorPool;
 use oxc_str::CompactStr;
 
 use crate::output::RenderedDiagnostic;
+use crate::overlay::Overlays;
 use crate::report::{ReportOptions, diagnostics_by_file, finish_report};
 use crate::runner::{self, ExtractionCache, RunnerOptions};
 use crate::setup::{self, ConfigLoadError};
@@ -128,6 +129,13 @@ pub struct WatchSession {
     extraction_cache: ExtractionCache,
     walked_paths: Vec<PathBuf>,
 
+    /// In-memory overlay content for open editor buffers (L1, `docs/PLAN.md` §3):
+    /// wins over disk content for any covered path, in both extraction and
+    /// diagnostic line/col rendering. Empty until [`WatchSession::set_overlay`] is
+    /// called — the CLI's own `--watch`/`--watch-poll` path never populates it, only
+    /// the future `import-lint lsp` server (L2) does.
+    overlays: Overlays,
+
     /// The current module graph, kept alive across cycles (not rebuilt from scratch
     /// each time) so a content-edit-only cycle can patch it in place instead of
     /// re-deriving it from the whole project (PLAN-v1.md §7 incremental design).
@@ -166,6 +174,7 @@ fn build_walk_and_resolver(
     project_root: &Path,
     pool: &AllocatorPool,
     cache: &mut ExtractionCache,
+    overlays: &Overlays,
 ) -> WalkAndResolver {
     let roots = setup::compute_roots(cli_paths, config, project_root);
     let tsconfig_path = setup::compute_tsconfig(cli_tsconfig, config, project_root);
@@ -184,7 +193,7 @@ fn build_walk_and_resolver(
         Some(runner_options.project_root.as_path()),
         &runner_options.exclude,
     );
-    let initial = runner::extract_with_cache(&walked_paths, pool, cache);
+    let initial = runner::extract_with_cache(&walked_paths, pool, cache, overlays);
     let resolver =
         runner::build_resolver_from_files(&runner_options, &walked_paths, &initial.files);
 
@@ -216,6 +225,7 @@ impl WatchSession {
         let loaded = setup::load_config(options.explicit_config.as_deref(), &options.cwd)?;
         let pool = AllocatorPool::new(rayon::current_num_threads());
         let mut cache = ExtractionCache::new();
+        let overlays = Overlays::default();
 
         let built = build_walk_and_resolver(
             &options.cli_paths,
@@ -224,6 +234,7 @@ impl WatchSession {
             &loaded.project_root,
             &pool,
             &mut cache,
+            &overlays,
         );
 
         let mut session = WatchSession {
@@ -245,6 +256,7 @@ impl WatchSession {
             pool,
             extraction_cache: cache,
             walked_paths: built.walked_paths,
+            overlays,
 
             graph: ModuleGraph::build(Vec::new(), HashMap::new(), HashSet::new()),
             diagnostics_map: HashMap::new(),
@@ -254,6 +266,32 @@ impl WatchSession {
         };
         session.full_recheck(built.initial);
         Ok(session)
+    }
+
+    /// Set (or replace) the in-memory overlay content for `path` (L1, `docs/PLAN.md`
+    /// §3): overrides its on-disk content in extraction and diagnostic line/col
+    /// rendering until [`WatchSession::clear_overlay`] is called. This only mutates
+    /// overlay state — nothing is re-checked until the caller follows up with
+    /// `run_cycle(&[ChangeKind::ContentEdit(path)])`.
+    ///
+    /// `path` must be the same path identity used everywhere else for this file (a
+    /// canonical path — the same one a `ChangeKind::ContentEdit` for it would carry,
+    /// and the same one the module graph keys its files by). This method does not
+    /// canonicalize `path` itself: canonicalizing here would fail for a file that no
+    /// longer exists on disk, and an overlay must still be settable for such a path
+    /// (an unsaved buffer whose file was deleted on disk) — the caller is expected to
+    /// have already resolved `path` to its canonical form while the file still
+    /// existed (e.g. at the time it was opened).
+    pub fn set_overlay(&mut self, path: PathBuf, content: String) {
+        self.overlays.set(path, content);
+    }
+
+    /// Clear the overlay for `path`, if any (see [`WatchSession::set_overlay`] for
+    /// the path-identity requirement), returning whether one existed. Disk content
+    /// becomes authoritative again for this file; nothing is re-checked until the
+    /// caller follows up with `run_cycle(&[ChangeKind::ContentEdit(path)])`.
+    pub fn clear_overlay(&mut self, path: &Path) -> bool {
+        self.overlays.clear(path)
     }
 
     /// The most recently computed diagnostics (from `new()` or the last
@@ -367,6 +405,7 @@ impl WatchSession {
             &self.project_root,
             &self.pool,
             &mut self.extraction_cache,
+            &self.overlays,
         );
         self.roots = built.roots;
         self.tsconfig_path = built.tsconfig_path;
@@ -388,6 +427,7 @@ impl WatchSession {
             &self.resolver,
             &self.pool,
             &mut self.extraction_cache,
+            &self.overlays,
         );
         let rechecked_files = crate::timing::phase("rechecked_files_count", || {
             outcome
@@ -420,6 +460,7 @@ impl WatchSession {
                     quiet: self.quiet,
                 },
                 &targets,
+                &self.overlays,
             )
         });
         self.compose_from_map();
@@ -457,8 +498,12 @@ impl WatchSession {
         for path in &unique_paths {
             self.extraction_cache.remove(path);
         }
-        let extracted =
-            runner::extract_with_cache(&unique_paths, &self.pool, &mut self.extraction_cache);
+        let extracted = runner::extract_with_cache(
+            &unique_paths,
+            &self.pool,
+            &mut self.extraction_cache,
+            &self.overlays,
+        );
         let extracted_files = extracted.extracted_files;
 
         let mut new_files: HashMap<PathBuf, Arc<FileModuleInfo>> = HashMap::new();
@@ -557,6 +602,7 @@ impl WatchSession {
                     quiet: self.quiet,
                 },
                 &dirty_refs,
+                &self.overlays,
             )
         });
         self.diagnostics_map.extend(dirty_result);

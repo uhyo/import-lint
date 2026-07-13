@@ -435,6 +435,222 @@ fn new_returns_an_error_for_a_missing_explicit_config_instead_of_starting() {
     assert!(err.to_string().contains("does-not-exist.jsonc"));
 }
 
+/// Buffer overlay tests (L1, `docs/PLAN.md` §3/§5): `WatchSession::set_overlay`/
+/// `clear_overlay` only mutate state, so every test here follows the same shape —
+/// mutate overlay state, then drive a `run_cycle` (usually `ContentEdit` for the
+/// file whose overlay changed, matching how the future LSP server will call this) —
+/// and asserts on the resulting diagnostics or `extracted_files` count.
+#[test]
+fn overlay_removes_violation_while_disk_unchanged() {
+    let dir = TempDir::new().unwrap();
+    let (consumer, _util) = write_violation_fixture(dir.path());
+
+    let mut session = WatchSession::new(session_options(dir.path())).expect("session builds");
+    assert_eq!(session.last_diagnostics().len(), 1);
+
+    session.set_overlay(consumer.clone(), "console.log(1);\n".to_string());
+    let outcome = session.run_cycle(&[ChangeKind::ContentEdit(consumer.clone())]);
+
+    assert!(
+        outcome.diagnostics.is_empty(),
+        "expected the overlay to clear the violation, got {:?}",
+        outcome.diagnostics
+    );
+    let disk_content = fs::read_to_string(&consumer).unwrap();
+    assert!(
+        disk_content.contains("helper"),
+        "disk content must be untouched by setting an overlay"
+    );
+}
+
+#[test]
+fn overlay_reset_takes_effect_without_disk_change() {
+    let dir = TempDir::new().unwrap();
+    let (consumer, _util) = write_violation_fixture(dir.path());
+
+    let mut session = WatchSession::new(session_options(dir.path())).expect("session builds");
+    assert_eq!(session.last_diagnostics().len(), 1);
+
+    // Same violating content as disk, set as an overlay: still a violation.
+    session.set_overlay(
+        consumer.clone(),
+        "import { helper } from \"./internal/util\";\nconsole.log(helper);\n".to_string(),
+    );
+    let outcome = session.run_cycle(&[ChangeKind::ContentEdit(consumer.clone())]);
+    assert_eq!(outcome.diagnostics.len(), 1);
+
+    // Re-set the overlay to non-violating content. Disk never changes; only the
+    // version-counter bump (not any stat-detected change) can invalidate the cache
+    // here.
+    session.set_overlay(consumer.clone(), "console.log(1);\n".to_string());
+    let outcome = session.run_cycle(&[ChangeKind::ContentEdit(consumer)]);
+    assert!(
+        outcome.diagnostics.is_empty(),
+        "re-setting the overlay must take effect even though disk mtime/size never changed, got {:?}",
+        outcome.diagnostics
+    );
+}
+
+#[test]
+fn clear_overlay_restores_disk_truth() {
+    let dir = TempDir::new().unwrap();
+    let (consumer, _util) = write_violation_fixture(dir.path());
+
+    let mut session = WatchSession::new(session_options(dir.path())).expect("session builds");
+    assert_eq!(session.last_diagnostics().len(), 1);
+
+    session.set_overlay(consumer.clone(), "console.log(1);\n".to_string());
+    let outcome = session.run_cycle(&[ChangeKind::ContentEdit(consumer.clone())]);
+    assert!(outcome.diagnostics.is_empty());
+
+    assert!(
+        session.clear_overlay(&consumer),
+        "an overlay was set for consumer, so clearing it should report true"
+    );
+    let outcome = session.run_cycle(&[ChangeKind::ContentEdit(consumer)]);
+    assert_eq!(
+        outcome.diagnostics.len(),
+        1,
+        "clearing the overlay should make disk content authoritative again, got {:?}",
+        outcome.diagnostics
+    );
+}
+
+#[test]
+fn overlay_hides_subsequent_disk_edit() {
+    let dir = TempDir::new().unwrap();
+    let (consumer, _util) = write_violation_fixture(dir.path());
+
+    let mut session = WatchSession::new(session_options(dir.path())).expect("session builds");
+    assert_eq!(session.last_diagnostics().len(), 1);
+
+    session.set_overlay(consumer.clone(), "console.log(1);\n".to_string());
+    let outcome = session.run_cycle(&[ChangeKind::ContentEdit(consumer.clone())]);
+    assert!(outcome.diagnostics.is_empty());
+
+    // Disk changes underneath the overlay (e.g. a `git pull` or another process);
+    // the overlay must still govern.
+    fs::write(
+        &consumer,
+        "import { helper } from \"./internal/util\";\nconsole.log(helper);\nconsole.log(2);\n",
+    )
+    .unwrap();
+    let outcome = session.run_cycle(&[ChangeKind::ContentEdit(consumer)]);
+    assert!(
+        outcome.diagnostics.is_empty(),
+        "the overlay should still govern despite a disk edit underneath it, got {:?}",
+        outcome.diagnostics
+    );
+}
+
+/// The L1 milestone exit criterion (`docs/PLAN.md` §7): an unsaved overlay edit to
+/// one file changes the diagnostic reported in a *different* file that imports it
+/// transitively, without touching that other file or disk at all. Reuses the
+/// star-export-chain fixture shape from
+/// `content_edit_propagates_through_a_star_export_chain` above, but the edit to
+/// `inner.ts` is an overlay only — disk is never written.
+#[test]
+fn cross_file_overlay_edit_moves_diagnostic_in_other_file() {
+    let dir = TempDir::new().unwrap();
+    let inner = canonical(&write(
+        dir.path(),
+        "src/inner.ts",
+        "/** @package */\nexport const value = 1;\n",
+    ));
+    write(dir.path(), "src/barrel.ts", "export * from \"./inner\";\n");
+    write(
+        dir.path(),
+        "other/user.ts",
+        "import { value } from \"../src/barrel\";\nconsole.log(value);\n",
+    );
+
+    let mut session = WatchSession::new(session_options(dir.path())).expect("session builds");
+    assert_eq!(
+        session.last_diagnostics().len(),
+        1,
+        "user.ts and inner.ts are in different directories, so @package should violate"
+    );
+
+    session.set_overlay(
+        inner.clone(),
+        "/** @public */\nexport const value = 1;\n".to_string(),
+    );
+    let outcome = session.run_cycle(&[ChangeKind::ContentEdit(inner.clone())]);
+    assert!(
+        outcome.diagnostics.is_empty(),
+        "expected user.ts's diagnostic to clear from an unsaved overlay edit to inner.ts, got {:?}",
+        outcome.diagnostics
+    );
+
+    let disk_content = fs::read_to_string(&inner).unwrap();
+    assert!(
+        disk_content.contains("@package"),
+        "inner.ts's disk content must be untouched by the overlay edit"
+    );
+}
+
+#[test]
+fn overlay_positions_used_for_line_col() {
+    let dir = TempDir::new().unwrap();
+    let (consumer, _util) = write_violation_fixture(dir.path());
+
+    let mut session = WatchSession::new(session_options(dir.path())).expect("session builds");
+    assert_eq!(session.last_diagnostics().len(), 1);
+    let disk_line = session.last_diagnostics()[0].line;
+
+    // The overlay inserts a leading blank line before the violating import: the
+    // diagnostic's line must reflect the overlay text, not the disk text.
+    session.set_overlay(
+        consumer.clone(),
+        "\nimport { helper } from \"./internal/util\";\nconsole.log(helper);\n".to_string(),
+    );
+    let outcome = session.run_cycle(&[ChangeKind::ContentEdit(consumer)]);
+    assert_eq!(outcome.diagnostics.len(), 1);
+    assert_eq!(
+        outcome.diagnostics[0].line,
+        disk_line + 1,
+        "diagnostic line/col must be computed against the overlay text, not disk text"
+    );
+}
+
+#[test]
+fn full_rebuild_respects_overlays() {
+    let dir = TempDir::new().unwrap();
+    let (consumer, _util) = write_violation_fixture(dir.path());
+
+    let mut session = WatchSession::new(session_options(dir.path())).expect("session builds");
+    assert_eq!(session.last_diagnostics().len(), 1);
+
+    session.set_overlay(consumer.clone(), "console.log(1);\n".to_string());
+    // `Structural` forces the full-rebuild path (re-walk + fresh resolver +
+    // `full_recheck`), not the fast content-edit path.
+    let outcome = session.run_cycle(&[ChangeKind::Structural]);
+    assert!(
+        outcome.diagnostics.is_empty(),
+        "the full-rebuild fallback must respect overlays too, got {:?}",
+        outcome.diagnostics
+    );
+}
+
+/// Guards against over-invalidation (R1, `docs/PLAN.md` §6): setting an overlay for
+/// one file and running a cycle for it must re-extract only that file, not the
+/// whole project.
+#[test]
+fn overlay_set_only_re_extracts_the_overlaid_file() {
+    let dir = TempDir::new().unwrap();
+    let a = canonical(&write(dir.path(), "src/a.ts", "export const a = 1;\n"));
+    write(dir.path(), "src/b.ts", "export const b = 1;\n");
+
+    let mut session = WatchSession::new(session_options(dir.path())).expect("session builds");
+
+    session.set_overlay(a.clone(), "export const a = 2;\n".to_string());
+    let outcome = session.run_cycle(&[ChangeKind::ContentEdit(a)]);
+    assert_eq!(
+        outcome.extracted_files, 1,
+        "only the overlaid file should be re-extracted, not the whole project"
+    );
+}
+
 /// The one real-watcher test (M6 brief §Tests item 2): drive `watch_loop` with a
 /// real `PollWatcher` (used instead of the platform-recommended inotify watcher for
 /// determinism in CI, per `docs/PLAN-v1.md` §9.4) against an actual file edit, and

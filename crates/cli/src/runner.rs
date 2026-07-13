@@ -21,6 +21,7 @@ use oxc_parser::Parser as OxcParser;
 use oxc_str::CompactStr;
 use rayon::prelude::*;
 
+use crate::overlay::Overlays;
 use crate::source_type::source_type_for_path;
 use crate::timing;
 
@@ -53,13 +54,26 @@ impl RunnerOptions {
     }
 }
 
+/// The signal a cache entry is validated against (L1, `docs/PLAN.md` §3): a disk
+/// file's `(mtime, size)`, or — when an overlay covers the path — its overlay
+/// version. Overlay content always wins over disk state when both could apply (an
+/// overlaid file's `stat()` is never consulted at all), so the two variants are
+/// mutually exclusive per path, never compared against each other: a file gaining or
+/// losing its overlay naturally changes which variant [`current_stamp`] returns, which
+/// already differs from any previously cached stamp and forces a re-extract.
+#[derive(PartialEq)]
+enum SourceStamp {
+    Disk { mtime: SystemTime, size: u64 },
+    Overlay { version: u64 },
+}
+
 /// One cached extraction result, keyed by file path (see [`ExtractionCache`]):
-/// `(mtime, size)` at the time of extraction, plus the owned result. A cache entry is
-/// reused only if a fresh `stat()` of the file still reports the same `mtime` and
-/// `size` — good enough to detect any real edit, and cheap (no content hashing).
+/// the [`SourceStamp`] at the time of extraction, plus the owned result. A cache entry
+/// is reused only if a fresh [`current_stamp`] of the file still equals the cached
+/// stamp — good enough to detect any real edit (disk or overlay), and cheap (no
+/// content hashing).
 pub(crate) struct CachedExtraction {
-    mtime: SystemTime,
-    size: u64,
+    stamp: SourceStamp,
     info: Arc<FileModuleInfo>,
 }
 
@@ -99,7 +113,7 @@ pub struct RunOutcome {
 /// file's read/parse/resolve failure; such files are skipped with a stderr warning.
 pub fn run(options: &RunnerOptions) -> ModuleGraph {
     let mut cache = ExtractionCache::new();
-    run_with_cache(options, &mut cache).graph
+    run_with_cache(options, &mut cache, &Overlays::default()).graph
 }
 
 /// Same pipeline as [`run`], but extraction is served through `cache` (populated as
@@ -108,7 +122,11 @@ pub fn run(options: &RunnerOptions) -> ModuleGraph {
 /// [`ProjectResolver`], so it's what watch mode calls on startup and whenever the
 /// filesystem layout may have changed (file added/removed/renamed, `package.json`,
 /// config, or tsconfig edited).
-pub(crate) fn run_with_cache(options: &RunnerOptions, cache: &mut ExtractionCache) -> RunOutcome {
+pub(crate) fn run_with_cache(
+    options: &RunnerOptions,
+    cache: &mut ExtractionCache,
+    overlays: &Overlays,
+) -> RunOutcome {
     let lint_target_paths = timing::phase("walk", || {
         crate::walk::walk_with_excludes(
             &options.roots,
@@ -118,9 +136,16 @@ pub(crate) fn run_with_cache(options: &RunnerOptions, cache: &mut ExtractionCach
     });
 
     let pool = AllocatorPool::new(rayon::current_num_threads());
-    let initial = extract_with_cache(&lint_target_paths, &pool, cache);
+    let initial = extract_with_cache(&lint_target_paths, &pool, cache, overlays);
     let resolver = build_resolver_from_files(options, &lint_target_paths, &initial.files);
-    extract_and_link_from(&lint_target_paths, initial, &resolver, &pool, cache)
+    extract_and_link_from(
+        &lint_target_paths,
+        initial,
+        &resolver,
+        &pool,
+        cache,
+        overlays,
+    )
 }
 
 /// Build a fresh [`ProjectResolver`] for `options`, seeding the ambient-module
@@ -172,6 +197,7 @@ pub(crate) fn extract_and_link_from(
     resolver: &ProjectResolver,
     pool: &AllocatorPool,
     cache: &mut ExtractionCache,
+    overlays: &Overlays,
 ) -> RunOutcome {
     let lint_targets: HashSet<PathBuf> = lint_target_paths.iter().cloned().collect();
 
@@ -213,7 +239,7 @@ pub(crate) fn extract_and_link_from(
         }
         attempted.extend(new_targets.iter().cloned());
 
-        let next = extract_with_cache(&new_targets, pool, cache);
+        let next = extract_with_cache(&new_targets, pool, cache, overlays);
         extracted_files += next.extracted_files;
         pending = next.files;
         for file in &pending {
@@ -242,17 +268,16 @@ pub(crate) fn extract_with_cache(
     paths: &[PathBuf],
     pool: &AllocatorPool,
     cache: &mut ExtractionCache,
+    overlays: &Overlays,
 ) -> Extracted {
     let mut files: Vec<Arc<FileModuleInfo>> = Vec::with_capacity(paths.len());
     let mut miss_paths: Vec<PathBuf> = Vec::new();
 
     timing::phase(&format!("stat({} paths)", paths.len()), || {
         for path in paths {
-            match stat(path) {
-                Some((mtime, size)) => {
-                    let cache_hit = cache
-                        .get(path)
-                        .is_some_and(|cached| cached.mtime == mtime && cached.size == size);
+            match current_stamp(path, overlays) {
+                Some(stamp) => {
+                    let cache_hit = cache.get(path).is_some_and(|cached| cached.stamp == stamp);
                     if cache_hit {
                         // `cache_hit` guarantees `cache.get(path)` is `Some`.
                         files.push(cache.get(path).unwrap().info.clone());
@@ -261,12 +286,13 @@ pub(crate) fn extract_with_cache(
                     miss_paths.push(path.clone());
                 }
                 None => {
-                    // Can't stat: vanished between walking and extracting, a permission
-                    // error, or (in principle) a platform without `mtime` support.
-                    // Always treat as a miss — `extract_one`'s own read-error path
-                    // reports/skips it — and drop any stale entry so a later
-                    // re-appearance of the file at this path is picked up fresh rather
-                    // than silently reusing old content.
+                    // Can't stat and no overlay covers it: vanished between walking
+                    // and extracting, a permission error, or (in principle) a platform
+                    // without `mtime` support. Always treat as a miss —
+                    // `extract_one`'s own read-error path reports/skips it — and drop
+                    // any stale entry so a later re-appearance of the file at this
+                    // path is picked up fresh rather than silently reusing old
+                    // content.
                     cache.remove(path);
                     miss_paths.push(path.clone());
                 }
@@ -276,16 +302,15 @@ pub(crate) fn extract_with_cache(
 
     let extracted_files = miss_paths.len();
     let newly_extracted = timing::phase(&format!("parse({extracted_files} files)"), || {
-        extract_files(&miss_paths, pool)
+        extract_files(&miss_paths, pool, overlays)
     });
     for info in newly_extracted {
         let arc = Arc::new(info);
-        if let Some((mtime, size)) = stat(&arc.path) {
+        if let Some(stamp) = current_stamp(&arc.path, overlays) {
             cache.insert(
                 arc.path.clone(),
                 CachedExtraction {
-                    mtime,
-                    size,
+                    stamp,
                     info: arc.clone(),
                 },
             );
@@ -299,6 +324,16 @@ pub(crate) fn extract_with_cache(
     }
 }
 
+/// [`SourceStamp`] for `path` right now (L1, `docs/PLAN.md` §3): the overlay version
+/// if `overlays` covers `path`, else the disk `(mtime, size)` — overlay content always
+/// wins, so an overlaid file's `stat()` is never even consulted.
+fn current_stamp(path: &Path, overlays: &Overlays) -> Option<SourceStamp> {
+    if let Some(version) = overlays.version(path) {
+        return Some(SourceStamp::Overlay { version });
+    }
+    stat(path).map(|(mtime, size)| SourceStamp::Disk { mtime, size })
+}
+
 fn stat(path: &Path) -> Option<(SystemTime, u64)> {
     let meta = fs::metadata(path).ok()?;
     let mtime = meta.modified().ok()?;
@@ -309,14 +344,18 @@ fn stat(path: &Path) -> Option<(SystemTime, u64)> {
 /// §8): one arena per worker, reset after each file, only the owned
 /// `FileModuleInfo` crosses the parallel boundary. A file that can't be read or
 /// fails to parse is skipped with a stderr warning rather than aborting the run.
-fn extract_files(paths: &[PathBuf], pool: &AllocatorPool) -> Vec<FileModuleInfo> {
+fn extract_files(
+    paths: &[PathBuf],
+    pool: &AllocatorPool,
+    overlays: &Overlays,
+) -> Vec<FileModuleInfo> {
     paths
         .par_iter()
-        .filter_map(|path| extract_one(path, pool))
+        .filter_map(|path| extract_one(path, pool, overlays))
         .collect()
 }
 
-fn extract_one(path: &Path, pool: &AllocatorPool) -> Option<FileModuleInfo> {
+fn extract_one(path: &Path, pool: &AllocatorPool, overlays: &Overlays) -> Option<FileModuleInfo> {
     // Every walked path already has a recognized extension (`walk()` filters for
     // it); this branch only fires for a fixpoint-discovered internal resolution
     // target with an extension ImportLint doesn't parse (e.g. a `.json` data
@@ -329,15 +368,20 @@ fn extract_one(path: &Path, pool: &AllocatorPool) -> Option<FileModuleInfo> {
         return None;
     };
 
-    let source_text = match fs::read_to_string(path) {
-        Ok(text) => text,
-        Err(err) => {
-            eprintln!(
-                "import-lint: cannot read {}: {err}, skipping",
-                path.display()
-            );
-            return None;
-        }
+    // An overlay (an open editor buffer's in-memory content, L1) always wins over
+    // disk content when both exist for `path`.
+    let source_text: Arc<str> = match overlays.content(path) {
+        Some(content) => content,
+        None => match fs::read_to_string(path) {
+            Ok(text) => Arc::from(text),
+            Err(err) => {
+                eprintln!(
+                    "import-lint: cannot read {}: {err}, skipping",
+                    path.display()
+                );
+                return None;
+            }
+        },
     };
 
     let allocator = pool.get();

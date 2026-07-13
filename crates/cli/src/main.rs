@@ -12,6 +12,7 @@ use std::time::Duration;
 use clap::{Parser as ClapParser, Subcommand};
 use import_lint::{CheckedEntry, ExportInfo, FileModuleInfo, Provenance, extract_file};
 use import_lint_cli::output::{OutputFormat, RenderedDiagnostic};
+use import_lint_cli::overlay::Overlays;
 use import_lint_cli::report::{ReportOptions, build_report};
 use import_lint_cli::runner::RunnerOptions;
 use import_lint_cli::setup;
@@ -160,6 +161,7 @@ fn lint(cli: Cli) -> ExitCode {
             report_unresolved: cli.report_unresolved,
             quiet: cli.quiet,
         },
+        &Overlays::default(),
     );
 
     let stdout = io::stdout();

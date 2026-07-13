@@ -11,6 +11,7 @@ use import_lint::diagnostics::line_col;
 use import_lint::{LintConfig, ModuleGraph, Provenance, Severity, check_files};
 
 use crate::output::{OutputSeverity, RenderedDiagnostic};
+use crate::overlay::Overlays;
 use crate::timing;
 
 /// Flags that affect what gets reported, orthogonal to the rule engine itself.
@@ -35,12 +36,15 @@ pub struct ReportResult {
 /// Run the rule engine over `module_graph` under `config`, plus `--report-unresolved`
 /// if requested, and produce the final sorted, `--quiet`-filtered diagnostic list.
 /// Source files are read once per file (`source_cache`) to compute line/column from
-/// byte-offset spans.
+/// byte-offset spans — an overlay's content wins over disk for any file `overlays`
+/// covers (L1, `docs/PLAN.md` §3); non-watch callers pass `&Overlays::default()` for
+/// no behavior change.
 pub fn build_report(
     module_graph: &ModuleGraph,
     config: &LintConfig,
     project_root: &Path,
     options: &ReportOptions,
+    overlays: &Overlays,
 ) -> ReportResult {
     let targets: Vec<&Path> = module_graph
         .lint_targets
@@ -48,7 +52,14 @@ pub fn build_report(
         .map(PathBuf::as_path)
         .collect();
     let by_file = timing::phase("check_graph", || {
-        diagnostics_by_file(module_graph, config, project_root, options, &targets)
+        diagnostics_by_file(
+            module_graph,
+            config,
+            project_root,
+            options,
+            &targets,
+            overlays,
+        )
     });
     finish_report(by_file.into_values().flatten(), options)
 }
@@ -102,6 +113,7 @@ pub fn diagnostics_by_file(
     project_root: &Path,
     options: &ReportOptions,
     files: &[&Path],
+    overlays: &Overlays,
 ) -> HashMap<PathBuf, Vec<RenderedDiagnostic>> {
     let mut source_cache: HashMap<PathBuf, String> = HashMap::new();
     let mut by_file: HashMap<PathBuf, Vec<RenderedDiagnostic>> = files
@@ -123,7 +135,7 @@ pub fn diagnostics_by_file(
             files,
         );
         for diagnostic in &core_diagnostics {
-            let source = read_cached(&mut source_cache, &diagnostic.path);
+            let source = read_cached(&mut source_cache, &diagnostic.path, overlays);
             let (line, column) = line_col(source, diagnostic.span.start);
             let (end_line, end_column) = line_col(source, diagnostic.span.end);
             by_file
@@ -144,7 +156,13 @@ pub fn diagnostics_by_file(
     }
 
     if options.report_unresolved {
-        collect_unresolved(module_graph, files, &mut source_cache, &mut by_file);
+        collect_unresolved(
+            module_graph,
+            files,
+            &mut source_cache,
+            &mut by_file,
+            overlays,
+        );
     }
 
     for diagnostics in by_file.values_mut() {
@@ -154,10 +172,21 @@ pub fn diagnostics_by_file(
     by_file
 }
 
-fn read_cached<'a>(cache: &'a mut HashMap<PathBuf, String>, path: &Path) -> &'a str {
-    cache
-        .entry(path.to_path_buf())
-        .or_insert_with(|| fs::read_to_string(path).unwrap_or_default())
+/// `path`'s source text for line/col rendering, cached per report pass: `overlays`'
+/// content wins over disk when it covers `path` (L1, `docs/PLAN.md` §3), matching
+/// `runner.rs`'s `extract_one` so a diagnostic's span and its rendered line/col are
+/// always computed against the same text.
+fn read_cached<'a>(
+    cache: &'a mut HashMap<PathBuf, String>,
+    path: &Path,
+    overlays: &Overlays,
+) -> &'a str {
+    cache.entry(path.to_path_buf()).or_insert_with(|| {
+        overlays
+            .content(path)
+            .map(|content| content.to_string())
+            .unwrap_or_else(|| fs::read_to_string(path).unwrap_or_default())
+    })
 }
 
 /// `--report-unresolved`: emit a warn-severity diagnostic for every checked entry
@@ -168,6 +197,7 @@ fn collect_unresolved(
     files: &[&Path],
     source_cache: &mut HashMap<PathBuf, String>,
     by_file: &mut HashMap<PathBuf, Vec<RenderedDiagnostic>>,
+    overlays: &Overlays,
 ) {
     for &target in files {
         let Some(file) = graph.file(target) else {
@@ -180,7 +210,7 @@ fn collect_unresolved(
             ) {
                 continue;
             }
-            let source = read_cached(source_cache, target);
+            let source = read_cached(source_cache, target, overlays);
             let (line, column) = line_col(source, entry.span.start);
             let (end_line, end_column) = line_col(source, entry.span.end);
             by_file
