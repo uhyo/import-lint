@@ -2,6 +2,7 @@
 //! (`src/main.rs`) so integration tests can drive discovery and the pipeline
 //! directly without spawning a subprocess (PLAN-v1.md M2).
 
+pub mod lsp;
 pub mod output;
 pub mod overlay;
 pub mod report;

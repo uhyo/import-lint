@@ -11,6 +11,7 @@ use std::time::Duration;
 
 use clap::{Parser as ClapParser, Subcommand};
 use import_lint::{CheckedEntry, ExportInfo, FileModuleInfo, Provenance, extract_file};
+use import_lint_cli::lsp::{self, LspOptions};
 use import_lint_cli::output::{OutputFormat, RenderedDiagnostic};
 use import_lint_cli::overlay::Overlays;
 use import_lint_cli::report::{ReportOptions, build_report};
@@ -97,6 +98,8 @@ enum Command {
         #[arg(long)]
         tsconfig: Option<PathBuf>,
     },
+    /// Run the LSP server (stdio).
+    Lsp,
 }
 
 fn main() -> ExitCode {
@@ -105,6 +108,7 @@ fn main() -> ExitCode {
     match cli.command {
         Some(Command::Inspect { file }) => inspect(&file),
         Some(Command::Graph { paths, tsconfig }) => graph(paths, tsconfig),
+        Some(Command::Lsp) => lsp_command(),
         None if cli.watch || cli.watch_poll.is_some() => watch_command(cli),
         None => lint(cli),
     }
@@ -254,6 +258,20 @@ fn watch_command(cli: Cli) -> ExitCode {
     }
 
     ExitCode::SUCCESS
+}
+
+/// The `lsp` subcommand (M8/L2, `docs/PLAN.md` §2): hand off to
+/// `import_lint_cli::lsp::run_stdio` and translate its result into an exit code.
+/// Takes no arguments — the LSP client configures everything (workspace root,
+/// run mode) through the protocol itself.
+fn lsp_command() -> ExitCode {
+    match lsp::run_stdio(LspOptions::default()) {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(err) => {
+            eprintln!("import-lint: lsp server failed: {err}");
+            ExitCode::from(2)
+        }
+    }
 }
 
 /// Render one watch-mode cycle (M6 brief D-W4): a full re-render each time (no
