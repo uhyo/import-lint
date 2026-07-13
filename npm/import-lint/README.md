@@ -31,6 +31,18 @@ npx import-lint --format json
 With no config file, ImportLint lints `.` with the `jsdoc` rule at `error`
 severity and defaults matching `eslint-plugin-import-access`.
 
+## Use in CI
+
+Exit code `1` on any error-severity diagnostic fails the build on violations;
+`--format github` produces inline PR annotations on GitHub Actions:
+
+```sh
+npx import-lint --format github
+```
+
+See [Using in CI](https://github.com/uhyo/import-lint#using-in-ci) in the main
+repository README for a full workflow example.
+
 See the [main repository README](https://github.com/uhyo/import-lint#readme)
 for the full CLI reference, config file format, output formats, watch mode,
 and the migration guide from `eslint-plugin-import-access`.

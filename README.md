@@ -1,5 +1,8 @@
 # ImportLint
 
+[![crates.io](https://img.shields.io/crates/v/import-lint.svg)](https://crates.io/crates/import-lint)
+[![npm](https://img.shields.io/npm/v/%40import-lint%2Fcli.svg)](https://www.npmjs.com/package/@import-lint/cli)
+
 A standalone Rust CLI linter for JavaScript and TypeScript that checks module-boundary
 import access — the same functionality as
 [`eslint-plugin-import-access`](https://github.com/uhyo/eslint-plugin-import-access),
@@ -14,6 +17,19 @@ Built on the [oxc](https://oxc.rs) toolchain for parsing and module resolution, 
 stays fast on large codebases without needing a full TypeScript type-check.
 
 ## Installation
+
+**npm** (recommended for JS/TS projects):
+
+```sh
+npm install -D @import-lint/cli
+```
+
+This installs the `import-lint` command — run it with `npx import-lint`.
+Prebuilt native binaries for darwin-arm64, darwin-x64, linux-x64 (glibc & musl),
+linux-arm64 (glibc), and win32-x64 are installed automatically via
+`optionalDependencies`, so there's no compilation and no postinstall scripts.
+
+**Cargo**:
 
 ```sh
 cargo install import-lint
@@ -31,6 +47,8 @@ cargo install --path crates/cli --locked
 ## Quickstart
 
 ```sh
+# Installed via npm? Prefix these with npx, e.g. `npx import-lint`.
+
 # Lint the current directory (or your config's `include` roots).
 import-lint
 
@@ -164,6 +182,28 @@ rule) are a hard load error (exit `2`) rather than a silently ignored no-op.
   ::error file=src/a.ts,line=3,col=10,endLine=3,endColumn=20::Cannot import a package-private export 'x'
   ```
 
+## Using in CI
+
+Exit code `1` on any error-severity diagnostic makes ImportLint CI-friendly out of
+the box, and `--format github` emits GitHub Actions workflow commands so
+violations show up as inline annotations on the PR.
+
+```yaml
+jobs:
+  import-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm ci
+      - run: npx import-lint --format github
+```
+
+For machine-readable output (e.g. to feed other tools), use `--format json`,
+which is ESLint-compatible.
+
 ## Exit codes
 
 | Code | Meaning |
@@ -228,6 +268,11 @@ restarting `import-lint --watch` manually.
 ImportLint's `jsdoc` rule is a behavioral port of the plugin's `import-access/jsdoc`
 rule, intended as a drop-in replacement:
 
+- **Swap the package**: in `package.json` `devDependencies`, replace
+  `eslint-plugin-import-access` with `@import-lint/cli`
+  (`npm uninstall eslint-plugin-import-access && npm install -D @import-lint/cli`).
+  The installed command is `import-lint`; remove the plugin from your ESLint
+  config.
 - **Options map 1:1, name-for-name**, with the same defaults: `indexLoophole`,
   `filenameLoophole`, `defaultImportability`, `treatSelfReferenceAs`,
   `excludeSourcePatterns`, `packageDirectory`. Copy your rule options straight into
