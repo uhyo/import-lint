@@ -16,6 +16,10 @@ imported from within the same "package" as the file that exports it.
 Built on the [oxc](https://oxc.rs) toolchain for parsing and module resolution, so it
 stays fast on large codebases without needing a full TypeScript type-check.
 
+## Project Status
+
+Treat this as a **beta product** until it reaches v1.0.0. This is Vibe Coded; this is supposed to work exactly like `eslint-plugin-import-access` which has already been proven useful in production. We believe it works and it's 100x faster than the ESLint plugin.
+
 ## Installation
 
 **npm** (recommended for JS/TS projects):
