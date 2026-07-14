@@ -1,0 +1,91 @@
+{
+  "name": "import-lint",
+  "displayName": "ImportLint",
+  "publisher": "uhyo",
+  "version": "0.1.0",
+  "private": false,
+  "description": "import-access diagnostics for TypeScript via the import-lint LSP server.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/uhyo/import-lint",
+    "directory": "editors/vscode"
+  },
+  "engines": {
+    "vscode": "^1.82.0"
+  },
+  "categories": [
+    "Linters"
+  ],
+  "main": "./dist/extension.js",
+  "activationEvents": [
+    "onLanguage:typescript",
+    "onLanguage:typescriptreact",
+    "onLanguage:javascript",
+    "onLanguage:javascriptreact",
+    "workspaceContains:**/.importlintrc.json",
+    "workspaceContains:**/.importlintrc.jsonc"
+  ],
+  "contributes": {
+    "configuration": {
+      "title": "ImportLint",
+      "properties": {
+        "importLint.enabled": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "on",
+            "off"
+          ],
+          "default": "auto",
+          "description": "Controls when the ImportLint language server starts. \"auto\" starts it only when a .importlintrc.json(c) exists in the workspace; \"on\" always starts it; \"off\" never starts it."
+        },
+        "importLint.run": {
+          "type": "string",
+          "enum": [
+            "onType",
+            "onSave"
+          ],
+          "default": "onType",
+          "description": "Whether ImportLint lints on every keystroke or only on save. Passed to the server as initializationOptions.run."
+        },
+        "importLint.binaryPath": {
+          "type": "string",
+          "default": "",
+          "description": "Absolute path to an import-lint binary. Overrides automatic resolution (workspace node_modules, then PATH)."
+        },
+        "importLint.trace.server": {
+          "type": "string",
+          "enum": [
+            "off",
+            "messages",
+            "verbose"
+          ],
+          "default": "off",
+          "description": "Traces the communication between VS Code and the ImportLint language server."
+        }
+      }
+    },
+    "commands": [
+      {
+        "command": "importLint.restart",
+        "title": "Restart Server",
+        "category": "ImportLint"
+      }
+    ]
+  },
+  "scripts": {
+    "build": "node esbuild.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test test/*.test.js",
+    "package": "npm run build && vsce package"
+  },
+  "devDependencies": {
+    "@types/node": "^18.19.71",
+    "@types/vscode": "^1.82.0",
+    "@vscode/vsce": "^3.2.1",
+    "esbuild": "^0.24.2",
+    "typescript": "^5.7.3",
+    "vscode-languageclient": "^9.0.1"
+  }
+}
