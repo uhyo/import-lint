@@ -154,3 +154,61 @@ release is bootstrapped manually.
 
 After step 3, pushing a `v*` tag ships npm automatically alongside crates.io and
 the GitHub Release — no tokens, no separate npm runbook step.
+
+## VS Code extension release
+
+The VS Code extension (`editors/vscode/`) is released **independently of the
+linter** (docs/PLAN.md E7): its own tags (`vscode-v*`), its own workflow
+(`.github/workflows/vscode-release.yml`), and its own version line. This is
+deliberate — the extension is a thin client that runs whatever `import-lint`
+binary the workspace has, so lockstep versioning with the linter would force
+empty releases every time only the server changed. To keep the two pipelines
+from cross-firing, the linter's `release.yml` trigger was narrowed from `v*`
+to `v[0-9]*`, which `vscode-v*` tags don't match.
+
+### One-time setup
+
+1. **VS Code Marketplace.** Create publisher `uhyo` at
+   https://marketplace.visualstudio.com/manage — it must match the
+   `publisher` field in `editors/vscode/package.json`. Then create an Azure
+   DevOps Personal Access Token scoped to that publisher, with the
+   Marketplace → **Manage** scope (not a full-access/all-organizations
+   token). Store it as the repo secret `VSCE_PAT`.
+
+   Note: global Azure DevOps PATs are being retired in December 2026 (plan
+   risk R4). A publisher-scoped Marketplace PAT is the current recommended
+   approach and should keep working past that date, but expect Microsoft to
+   move publishing auth to an Entra-ID-based flow at some point — treat this
+   as a known follow-up, not a surprise, when it happens.
+
+2. **Open VSX.** Create an Eclipse account and sign the [Open VSX publisher
+   agreement](https://open-vsx.org/). Create the `uhyo` namespace:
+
+   ```sh
+   npx ovsx create-namespace uhyo -p <token>
+   ```
+
+   Generate an access token at https://open-vsx.org (Settings → Access
+   Tokens) and store it as the repo secret `OVSX_PAT`.
+
+### Per release
+
+1. Bump `version` in `editors/vscode/package.json`, then run `npm install`
+   (from `editors/vscode/`) to refresh `package-lock.json`.
+2. Update `editors/vscode/CHANGELOG.md`.
+3. Commit, tag `vscode-vX.Y.Z`, and push the tag:
+
+   ```sh
+   git tag vscode-v0.2.0 && git push origin vscode-v0.2.0
+   ```
+
+CI (`vscode-release.yml`) gates the tag's version against
+`editors/vscode/package.json`, runs typecheck/test, packages the `.vsix`, and
+publishes it to both the VS Code Marketplace and Open VSX (each with
+`--skip-duplicate`, so a re-run of the job after a partial failure is safe),
+then attaches the `.vsix` to a GitHub release for the tag.
+
+Extension releases never touch crates.io, npm, or the linter's GitHub
+Releases — and, per the tag-pattern note above, the linter's `v*` → `v[0-9]*`
+narrowing means a `vscode-v*` push can never trigger `release.yml` by
+accident.

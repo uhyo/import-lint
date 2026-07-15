@@ -315,6 +315,32 @@ machine details, and reproduction commands):
 Reproduce with `scripts/bench.sh` (add `--compare-eslint` for the ESLint
 comparison) and `cargo bench -p import-lint-core --bench extract`.
 
+## Editor integration
+
+The [ImportLint VS Code extension](https://marketplace.visualstudio.com/items?itemName=uhyo.import-lint)
+(`uhyo.import-lint`, also on [Open VSX](https://open-vsx.org/extension/uhyo/import-lint))
+shows violations as you type, including cross-file ones — a change in a file
+you haven't opened can surface a diagnostic in a file that imports it. It
+needs no extra install beyond `npm install -D @import-lint/cli`: the
+extension finds the workspace binary automatically (`importLint.binaryPath`
+overrides this, and `PATH` is the fallback). It activates automatically when
+an `.importlintrc.json(c)` is present (`importLint.enabled` forces it on or
+off), and `importLint.run` controls whether it lints on every keystroke
+(`onType`, the default) or only on save (`onSave`).
+
+**Other editors:** the same binary speaks [LSP](https://microsoft.github.io/language-server-protocol/)
+over stdio via `import-lint lsp`. For Neovim (0.11+, using `vim.lsp.config`/
+`vim.lsp.enable`):
+
+```lua
+vim.lsp.config('import_lint', {
+  cmd = { 'import-lint', 'lsp' },
+  filetypes = { 'javascript', 'javascriptreact', 'typescript', 'typescriptreact' },
+  root_markers = { '.importlintrc.jsonc', '.importlintrc.json', '.git' },
+})
+vim.lsp.enable('import_lint')
+```
+
 ## Roadmap
 
 - v1.0 stabilization following the v0.1.0 crates.io / GitHub Releases launch.

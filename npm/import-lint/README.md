@@ -47,6 +47,15 @@ See the [main repository README](https://github.com/uhyo/import-lint#readme)
 for the full CLI reference, config file format, output formats, watch mode,
 and the migration guide from `eslint-plugin-import-access`.
 
+## Editor integration
+
+The [ImportLint VS Code extension](https://marketplace.visualstudio.com/items?itemName=uhyo.import-lint)
+shows violations as you type, on top of this package's binary — no separate
+install needed. The binary this package installs also includes `import-lint
+lsp`, for wiring up any other LSP-capable editor. See
+[Editor integration](https://github.com/uhyo/import-lint#editor-integration)
+in the main repository README for setup details.
+
 ## Supported platforms
 
 `darwin-arm64`, `darwin-x64`, `linux-x64-gnu`, `linux-x64-musl`,

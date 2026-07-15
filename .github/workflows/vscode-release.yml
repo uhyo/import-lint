@@ -1,0 +1,76 @@
+name: VS Code Extension Release
+
+on:
+  push:
+    tags:
+      - "vscode-v*"
+
+permissions:
+  contents: write
+
+defaults:
+  run:
+    working-directory: editors/vscode
+
+jobs:
+  publish:
+    name: publish
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: editors/vscode/package-lock.json
+
+      - name: npm ci
+        run: npm ci
+
+      # Extension releases are decoupled from linter releases (docs/PLAN.md
+      # E7) — the tag's version must still match package.json, the same way
+      # npm-smoke gates the linter's npm packages against the pushed tag.
+      - name: Check tag matches package.json version
+        run: |
+          TAG_VERSION="${GITHUB_REF_NAME#vscode-v}"
+          PKG_VERSION="$(node -p "require('./package.json').version")"
+          if [ "$TAG_VERSION" != "$PKG_VERSION" ]; then
+            echo "::error::tag vscode-v$TAG_VERSION does not match package.json version $PKG_VERSION"
+            exit 1
+          fi
+          echo "TAG_VERSION=$TAG_VERSION" >> "$GITHUB_ENV"
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Test
+        run: npm test
+
+      - name: Package (esbuild + vsce package)
+        run: npm run package
+
+      - name: Publish to VS Code Marketplace
+        run: npx vsce publish --packagePath "import-lint-${TAG_VERSION}.vsix" --skip-duplicate
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+
+      - name: Publish to Open VSX
+        run: npx ovsx publish "import-lint-${TAG_VERSION}.vsix" --skip-duplicate
+        env:
+          OVSX_PAT: ${{ secrets.OVSX_PAT }}
+
+      - name: Create GitHub release
+        # Idempotent: a re-run of this job (e.g. after a mid-sequence
+        # failure) must not fail just because the release already exists.
+        run: |
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            echo "skip: release $GITHUB_REF_NAME already exists"
+          else
+            gh release create "$GITHUB_REF_NAME" "import-lint-${TAG_VERSION}.vsix" \
+              --title "$GITHUB_REF_NAME" \
+              --notes "ImportLint VS Code extension ${TAG_VERSION}. See editors/vscode/CHANGELOG.md."
+          fi
+        env:
+          GH_TOKEN: ${{ github.token }}
