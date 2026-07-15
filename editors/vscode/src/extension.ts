@@ -4,7 +4,6 @@ import {
   LanguageClient,
   LanguageClientOptions,
   ServerOptions,
-  TransportKind,
 } from "vscode-languageclient/node";
 import { locateBinary, parseVersionOutput, isVersionAtLeast, MIN_LSP_VERSION } from "./locator";
 
@@ -120,10 +119,13 @@ async function maybeStart(context: vscode.ExtensionContext): Promise<void> {
 
   const run = config.get<RunSetting>("run", "onType");
 
+  // No `transport` here: for an Executable, vscode-languageclient appends a
+  // `--stdio` argument when a transport is specified, which our clap
+  // subcommand rejects. Plain stdio over the child's stdin/stdout is the
+  // default and is what `import-lint lsp` speaks.
   const serverOptions: ServerOptions = {
     command: located.path,
     args: ["lsp"],
-    transport: TransportKind.stdio,
   };
 
   const clientOptions: LanguageClientOptions = {
