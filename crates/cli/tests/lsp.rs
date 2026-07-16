@@ -1,4 +1,4 @@
-//! LSP protocol tests (L2, `docs/PLAN.md` §5): drive the real server loop
+//! LSP protocol tests (L2, `docs/PLAN-lsp.md` §5): drive the real server loop
 //! (`import_lint_cli::lsp::run_with_connection`) over `lsp_server::Connection::memory()`
 //! — no stdio, no editor, no real filesystem watcher. The harness below is a small
 //! client: it does the initialize handshake, sends notifications, and waits for

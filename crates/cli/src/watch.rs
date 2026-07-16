@@ -129,7 +129,7 @@ pub struct WatchSession {
     extraction_cache: ExtractionCache,
     walked_paths: Vec<PathBuf>,
 
-    /// In-memory overlay content for open editor buffers (L1, `docs/PLAN.md` §3):
+    /// In-memory overlay content for open editor buffers (L1, `docs/PLAN-lsp.md` §3):
     /// wins over disk content for any covered path, in both extraction and
     /// diagnostic line/col rendering. Empty until [`WatchSession::set_overlay`] is
     /// called — the CLI's own `--watch`/`--watch-poll` path never populates it, only
@@ -268,7 +268,7 @@ impl WatchSession {
         Ok(session)
     }
 
-    /// Set (or replace) the in-memory overlay content for `path` (L1, `docs/PLAN.md`
+    /// Set (or replace) the in-memory overlay content for `path` (L1, `docs/PLAN-lsp.md`
     /// §3): overrides its on-disk content in extraction and diagnostic line/col
     /// rendering until [`WatchSession::clear_overlay`] is called. This only mutates
     /// overlay state — nothing is re-checked until the caller follows up with

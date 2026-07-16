@@ -260,7 +260,7 @@ fn watch_command(cli: Cli) -> ExitCode {
     ExitCode::SUCCESS
 }
 
-/// The `lsp` subcommand (M8/L2, `docs/PLAN.md` §2): hand off to
+/// The `lsp` subcommand (M8/L2, `docs/PLAN-lsp.md` §2): hand off to
 /// `import_lint_cli::lsp::run_stdio` and translate its result into an exit code.
 /// Takes no arguments — the LSP client configures everything (workspace root,
 /// run mode) through the protocol itself.

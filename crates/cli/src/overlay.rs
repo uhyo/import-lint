@@ -1,4 +1,4 @@
-//! In-memory overlay content for open editor buffers (L1, `docs/PLAN.md` §3): an
+//! In-memory overlay content for open editor buffers (L1, `docs/PLAN-lsp.md` §3): an
 //! overlay's content overrides its file's on-disk content in extraction (`runner.rs`)
 //! and in diagnostic line/col rendering (`report.rs`), while everything else about the
 //! pipeline — walking, resolution, the check phase — is unaffected. [`Overlays`] is

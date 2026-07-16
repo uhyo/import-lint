@@ -1,4 +1,4 @@
-//! The `import-lint lsp` server (L2, `docs/PLAN.md` §2, decisions E2-E5/E8/E10):
+//! The `import-lint lsp` server (L2, `docs/PLAN-lsp.md` §2, decisions E2-E5/E8/E10):
 //! a synchronous `lsp-server`/`lsp-types` main loop wrapping the existing
 //! [`crate::watch::WatchSession`] engine. Diagnostics are push-only
 //! (`textDocument/publishDiagnostics`) for the whole project, not just open
@@ -144,7 +144,7 @@ fn resolve_workspace_root(params: &InitializeParams) -> (PathBuf, Option<String>
         let warning = (folders.len() > 1).then(|| {
             format!(
                 "import-lint: multiple workspace folders are open; using {} \
-                 (multi-root workspaces are not supported, docs/PLAN.md E10)",
+                 (multi-root workspaces are not supported, docs/PLAN-lsp.md E10)",
                 path.display()
             )
         });
