@@ -1,6 +1,6 @@
 "use strict";
 
-// The extension's binary locator (docs/PLAN.md §4, decision E6). Plain
+// The extension's binary locator (docs/PLAN-lsp.md §4, decision E6). Plain
 // CommonJS so it can be unit-tested with `node --test` without a build step,
 // mirroring the npm shim's testing approach (npm/import-lint/test/shim.test.js).
 //

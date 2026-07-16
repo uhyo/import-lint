@@ -391,7 +391,7 @@ fn new_returns_an_error_for_a_missing_explicit_config_instead_of_starting() {
     assert!(err.to_string().contains("does-not-exist.jsonc"));
 }
 
-/// Buffer overlay tests (L1, `docs/PLAN.md` §3/§5): `WatchSession::set_overlay`/
+/// Buffer overlay tests (L1, `docs/PLAN-lsp.md` §3/§5): `WatchSession::set_overlay`/
 /// `clear_overlay` only mutate state, so every test here follows the same shape —
 /// mutate overlay state, then drive a `run_cycle` (usually `ContentEdit` for the
 /// file whose overlay changed, matching how the future LSP server will call this) —
@@ -499,7 +499,7 @@ fn overlay_hides_subsequent_disk_edit() {
     );
 }
 
-/// The L1 milestone exit criterion (`docs/PLAN.md` §7): an unsaved overlay edit to
+/// The L1 milestone exit criterion (`docs/PLAN-lsp.md` §7): an unsaved overlay edit to
 /// one file changes the diagnostic reported in a *different* file that imports it
 /// transitively, without touching that other file or disk at all. Reuses the
 /// star-export-chain fixture shape from
@@ -588,7 +588,7 @@ fn full_rebuild_respects_overlays() {
     );
 }
 
-/// Guards against over-invalidation (R1, `docs/PLAN.md` §6): setting an overlay for
+/// Guards against over-invalidation (R1, `docs/PLAN-lsp.md` §6): setting an overlay for
 /// one file and running a cycle for it must re-extract only that file, not the
 /// whole project.
 #[test]

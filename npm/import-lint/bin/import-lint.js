@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 "use strict";
 
-// The launcher shim (docs/PLAN.md §3): locates the platform-specific binary
+// The launcher shim (docs/PLAN-npm.md §3): locates the platform-specific binary
 // package that `optionalDependencies` should have installed and execs it.
 // Kept intentionally dumb — no update checks, no telemetry, no config — since
 // it runs on every single lint invocation.

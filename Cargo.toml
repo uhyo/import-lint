@@ -38,7 +38,7 @@ tempfile = "3.14"
 # notify major bump can change the event/watcher API shape.
 notify = "=8.2.0"
 notify-debouncer-full = { version = "=0.7.0", default-features = false }
-# LSP server (M8/L2, docs/PLAN.md §2, decision D-L1): `lsp-types` pinned exact —
+# LSP server (M8/L2, docs/PLAN-lsp.md §2, decision D-L1): `lsp-types` pinned exact —
 # 0.96+ replaced `url::Url` with a fluent-uri newtype that has no `to_file_path()`,
 # which our URI<->path conversion (`crates/cli/src/lsp/convert.rs`) needs; 0.95.1
 # is the last release keeping `url::Url` and covers every LSP feature we use.

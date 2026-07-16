@@ -54,7 +54,7 @@ impl RunnerOptions {
     }
 }
 
-/// The signal a cache entry is validated against (L1, `docs/PLAN.md` §3): a disk
+/// The signal a cache entry is validated against (L1, `docs/PLAN-lsp.md` §3): a disk
 /// file's `(mtime, size)`, or — when an overlay covers the path — its overlay
 /// version. Overlay content always wins over disk state when both could apply (an
 /// overlaid file's `stat()` is never consulted at all), so the two variants are
@@ -324,7 +324,7 @@ pub(crate) fn extract_with_cache(
     }
 }
 
-/// [`SourceStamp`] for `path` right now (L1, `docs/PLAN.md` §3): the overlay version
+/// [`SourceStamp`] for `path` right now (L1, `docs/PLAN-lsp.md` §3): the overlay version
 /// if `overlays` covers `path`, else the disk `(mtime, size)` — overlay content always
 /// wins, so an overlaid file's `stat()` is never even consulted.
 fn current_stamp(path: &Path, overlays: &Overlays) -> Option<SourceStamp> {

@@ -1,4 +1,4 @@
-//! URI<->path and diagnostic conversion for the LSP server (L2, `docs/PLAN.md` §2).
+//! URI<->path and diagnostic conversion for the LSP server (L2, `docs/PLAN-lsp.md` §2).
 //!
 //! Path identity matters here: every path this module hands back must be in the same
 //! form the watch engine's module graph keys files by — a canonicalized path, per

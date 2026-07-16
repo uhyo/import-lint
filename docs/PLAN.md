@@ -1,19 +1,19 @@
-# ImportLint — LSP Server & VS Code Extension Plan (M8)
+# ImportLint — `init` Scaffolding Plan (M9)
 
-ImportLint ships as a CLI (crates.io `import-lint`, npm `@import-lint/cli` + six
-platform packages, GitHub Release binaries). The CLI's watch mode already delivers
-~5ms incremental re-check cycles on 10k-file trees — but users see violations only
-in a terminal. This plan puts those diagnostics in the editor: an LSP server built
-into the existing binary, and a VS Code extension as the first (and reference)
-client.
+Everything planned so far has shipped: the core linter (M0–M7), npm distribution
+(N1–N3), and the LSP server + VS Code extension (M8/L1–L4). Earlier plans are
+archived at [`docs/PLAN-v1.md`](./PLAN-v1.md), [`docs/PLAN-npm.md`](./PLAN-npm.md),
+and [`docs/PLAN-lsp.md`](./PLAN-lsp.md).
 
-Earlier plans are archived at [`docs/PLAN-v1.md`](./PLAN-v1.md) (core linter,
-M0–M7) and [`docs/PLAN-npm.md`](./PLAN-npm.md) (npm distribution, N1–N3).
+Today, adopting ImportLint means hand-writing `.importlintrc.jsonc` — in practice,
+copying the README's example and guessing which options fit your project. This plan
+adds a scaffolding subcommand:
 
-**Goal:** open a TypeScript project with an `.importlintrc.jsonc`, see
-import-access violations as you type — including in files you *didn't* edit
-(cross-file invalidation is the whole point of this linter) — with zero extra
-installs beyond `npm install -D @import-lint/cli` and the extension itself.
+**Goal:** `import-lint init` creates a ready-to-run, fully commented
+`.importlintrc.jsonc` in the current directory, offering a small set of **presets**
+chosen either interactively (TTY) or non-interactively via a `--preset` flag, so
+that `npx @import-lint/cli init && npx @import-lint/cli` is a working first-run
+experience.
 
 ---
 
@@ -21,154 +21,124 @@ installs beyond `npm install -D @import-lint/cli` and the extension itself.
 
 | # | Decision | Rationale |
 |---|---|---|
-| E1 | The LSP server ships **inside the existing `import-lint` binary** as a subcommand: **`import-lint lsp`** (stdio transport). No new crate, no new binary, no new packages. | Ruff's `ruff server` model. Reuses the entire crates.io/npm/GH-Release distribution as-is; the server version is automatically the project's linter version. Technically forced, too: the watch engine (`WatchSession`, `ExtractionCache`) lives in `crates/cli` behind `pub(crate)` — an in-crate `lsp/` module needs no visibility bumps or crate reorg. |
-| E2 | LSP library: **`lsp-server` + `lsp-types`** (rust-analyzer's stack), synchronous stdio main loop with `crossbeam_channel::select!`. | Our engine is synchronous (rayon inside); `lsp-server` is the only mainstream option with a plain sync API and is what Ruff/ty (same architecture) chose. No tokio dependency in the shipped binary. Known cost: `lsp-types` is stale-but-functional; we need nothing newer than LSP 3.16 features. Pinned to `=0.95.1` (decided during L2): 0.96+ replaced `url::Url` with a fluent-uri `Uri` that has no `to_file_path()`, and hand-rolling file-URI↔path conversion is a Windows edge-case minefield for zero feature gain. Fallback if we ever need async: `tower-lsp-server` (the maintained community fork used by oxc/Biome). |
-| E3 | Diagnostics are **push-only** (`textDocument/publishDiagnostics`) and published for **all project files, not just open documents**. After every engine cycle, the server diffs the full diagnostic set against what it last published per file and (re)publishes changed files, sending empty arrays to clear. | The engine computes the whole project's diagnostics every cycle anyway (`run_cycle` returns the full set) — publish-all is free, and it's the product: editing `a.ts` can create a violation in closed `b.ts`, and the user must see it in the Problems panel. Biome republishes open docs only because its engine is per-file on-demand; ours isn't. Pull diagnostics (`textDocument/diagnostic`) adds capability negotiation for no benefit here. |
-| E4 | **Lint-as-you-type via buffer overlays**: every open text document's in-memory content overrides its on-disk content in extraction *and* in diagnostic line/col rendering. `didChange` is debounced (~200ms) and mapped to the existing incremental fast path. A **`importLint.run`: `"onType"` (default) \| `"onSave"`** setting (oxc precedent) lets users opt out of keystroke linting. | The seams already exist: core `extract()` takes `source_text: &str` (never touches disk), and `WatchSession::run_cycle(&[ChangeKind])` was designed notify-free. The overlay must cover **all** open documents, not just the one that changed — otherwise a file importing another unsaved buffer resolves against stale disk content. |
-| E5 | Position encoding: **UTF-16 only** in v1 (the LSP default; no `positionEncoding` negotiation). | `line_col()` already emits UTF-16 code-unit columns (ESLint convention) — LSP conversion is literally subtracting 1 from line and column. Negotiating UTF-8 à la Biome is a later micro-optimization. |
-| E6 | VS Code extension: **one universal `.vsix`, no bundled binary, no downloads**. Binary resolution order: (1) `importLint.binaryPath` setting; (2) workspace `node_modules` — resolve `@import-lint/cli/package.json`, then the `@import-lint/<platform-key>` binary package (same key computation as the npm shim, incl. musl detection); (3) `PATH`. If nothing is found, show one actionable notification (install instructions), don't error-loop. | The Biome/oxc locator model, and the payoff of the npm milestone: projects that installed `@import-lint/cli` get a version-matched server with zero config. Bundling binaries (Ruff model) would mean 6+ platform-specific vsix builds per release for no gain. |
-| E7 | The extension lives **in-repo at `editors/vscode/`** (TypeScript, `vscode-languageclient`, esbuild bundle) and is released **independently of the linter** via **`vscode-v*` tags** publishing to **VS Code Marketplace + Open VSX** from CI. | Monorepo keeps extension and server protocol changes in one PR; oxc/Biome/Ruff use separate repos but we don't have their scale. The extension is a thin client that runs whatever binary the workspace has — its version line is decoupled from linter releases by design, so lockstep `v*` tagging would force empty releases. Open VSX covers Cursor/VSCodium/Windsurf users. |
-| E8 | Config/tsconfig changes: the server registers `workspace/didChangeWatchedFiles` (dynamic registration) for `.importlintrc.json{,c}` and the configured tsconfig, mapping them to the existing `ChangeKind::ConfigChanged`/`TsconfigChanged` hot-reload path. Escape hatch: **`importLint.restart`** command. | Watch mode's config hot-reload (re-load, full re-check, non-fatal on parse error) comes for free through `run_cycle`; the LSP client's file watcher replaces `notify`, which also sidesteps the WSL2 watcher problems entirely. |
-| E9 | The extension **starts the server only when a config file is present** in the workspace (`importLint.enabled`: `"auto"` (default) \| `"on"` \| `"off"`). | Activating in every JS/TS project and linting with implicit defaults would surprise users who never opted in. `"on"` covers zero-config users who want defaults. |
-| E10 | v1 scope is **diagnostics only**: no code actions/quick fixes, no hover, single workspace folder (first root wins; log a warning for multi-root). | Ship the vertical slice. Quick fixes (e.g. "annotate with `@public`") and multi-root need design of their own and nothing in v1 forecloses them. |
+| D-I1 | `init` is a subcommand of the existing binary — **`import-lint init [--preset <name>] [--force]`** — and writes `.importlintrc.jsonc` into the **current directory** (which thereby becomes the project root). | Same single-binary distribution story as `lsp` (PLAN-lsp.md E1): no new crate, no new packages, works identically via crates.io, npm shim, and GH-Release binaries. Writing to cwd matches config-discovery semantics exactly (the config file's directory *is* the project root, PLAN-v1.md D7) — no `--dir` flag to reason about. |
+| D-I2 | **Three presets: `standard`, `gradual`, `monorepo`** (see §2). A preset is a *scaffold-time template*, not a runtime mode: the generated file is plain config, fully editable, and contains no reference back to the preset (no `"extends"`). | The `jsdoc` rule has two axes that actually distinguish real-world setups (`defaultImportability`, `packageDirectory`); three presets cover them without sprawl. Scaffold-time-only keeps `crates/core` completely untouched — the config model, loader, and LSP know nothing about presets. *(Revised in review: default-package is the flagship for new projects, but bare default-package with every directory as a boundary is too strict to recommend — `standard` adopts the `*.package` naming convention recommended in the reference plugin's v3.1.0 `packageDirectory` writeup, see §2.)* |
+| D-I3 | Always write **`.importlintrc.jsonc`**, never `.json`, and every preset's output is **fully commented** — each option annotated the way the README example is. | `.jsonc` wins discovery over `.json` (D7), and comments are the product: the generated file doubles as inline documentation, which is what makes a template better than `{}`. |
+| D-I4 | Templates are **static string constants** in `crates/cli/src/init.rs`, one per preset — no serde serialization, no templating engine. Guard: a unit test parses every template through `LintConfig::load`. | Comments can't come out of `serde_json`, so string constants are forced anyway; the win is that `deny_unknown_fields` turns any future config-schema drift into a red test instead of a scaffold that fails at first lint. |
+| D-I5 | Interactive selection runs when `--preset` is absent **and stdin and stderr are both TTYs**: a hand-rolled **numbered menu** (prompt on stderr, one line read from stdin; empty input = `standard`; invalid input re-prompts; EOF is an error). Non-TTY without `--preset` exits `2` with a "pass `--preset <name>`" message. | No new dependencies: arrow-key pickers (`dialoguer`, `inquire`) need raw terminal mode, which is untestable in CI and overkill for three options. A numbered menu is a pure function over a reader/writer, unit-testable with a `Cursor`. Erroring (rather than silently defaulting) in non-TTY contexts matches the config loader's explicit-over-implicit philosophy; CI/scripts have `--preset`. |
+| D-I6 | Overwrite safety: if `.importlintrc.jsonc` **or** `.importlintrc.json` already exists in cwd, refuse with exit `2` unless `--force`. `--force` writes `.jsonc` and, when a `.json` remains beside it, prints a note that the `.jsonc` now shadows it. If a config exists only in an *ancestor* directory, proceed, but print a note that the new file takes over for this subtree. | Never destroy a config silently. The ancestor case is legitimate (initializing a nested project) but surprising enough to call out, since the new file changes the project root for everything under cwd. |
+| D-I7 | All `init` output (prompt, notes, success message) goes to **stderr**; stdout stays clean. Exit codes follow the CLI contract: `0` file created, `2` everything else (existing config without `--force`, non-TTY without `--preset`, I/O failure). | The lint invocation reserves stdout for diagnostics; `init` printing human chatter to stderr keeps the binary's stream contract uniform and `init`'s output pipe-safe. |
+| D-I8 | No filesystem sniffing in v1: `init` does not detect `tsconfig.json`, package managers, or workspace layouts. The template carries the commented-out `"tsconfig"` line; the existing `<project root>/tsconfig.json` default already covers the common case at lint time. | Keep `init` dumb and predictable. Detection (e.g. pre-filling `packageDirectory` from package.json `workspaces`) is a plausible v2, listed in §7 — it should be added deliberately, not smuggled into v1. |
 
-## 2. Server architecture (`crates/cli/src/lsp/`)
+## 2. Presets
+
+| Preset | Distinguishing config | Who it's for |
+|---|---|---|
+| `standard` | `"defaultImportability": "package"` + `"packageDirectory": ["**/*.package"]` | **New projects (recommended, the picker default): the `*.package` naming convention** — a *meta-configuration* (a naming rule, not a directory list, so the config never needs updating as the project grows). A directory named `foo.package/` is a hard encapsulation boundary: everything inside it, at any depth, imports freely from anything else inside; nothing outside can import from it unless the export is tagged `@public` (or surfaced through the boundary's `index.ts` — the index loophole, on by default, promotes `index.ts` exports to the parent's package, and since a bare re-export resets to `defaultImportability`, exposure cascades deliberately one level at a time). Boundaries are visible in the file tree itself. *Outside* any `*.package` directory, the package-directory fallback is the file's own parent, so default-package still means per-directory scoping there, with the same `index.ts` cascade as the escape valve — declare a `*.package` boundary above when a subtree should share freely. |
+| `gradual` | All defaults (`defaultImportability: "public"`, `indexLoophole: true`) | Incremental adoption on an existing codebase: nothing is restricted until you tag exports `@package`/`@private`. The generated file is essentially the README example. |
+| `monorepo` | `"defaultImportability": "package"` + `"packageDirectory": ["packages/*"]` (with a comment saying to adjust the globs, e.g. adding `"apps/*"`) | Workspace repos: boundaries sit at the workspace-package level — deep relative reach-ins across sibling packages (`../../other-pkg/src/…`) become errors unless the export is `@public`, while name-based imports of sibling workspace packages resolve through `node_modules` and stay exempt as external (and `treatSelfReferenceAs` keeps its `"external"` default). Inside one workspace package, imports are unrestricted. |
+
+Each template is a complete, self-describing config: `include`, `exclude`, the
+commented `tsconfig` line, and the full `rules.jsdoc` block with every option
+present (commented out when it's at its default), adapted from the README's config
+example. The preset determines which lines are live and what values they hold —
+nothing else differs. The `standard` template's comments also teach the workflow
+(name a boundary `foo.package/`; publish via `index.ts` re-export or `@public`)
+and show the documented alternative conventions as commented-out one-liners so
+switching is a single edit: the inverse naming rule (`["**", "!**/*.internal"]` —
+every directory is a boundary *except* ones opting out by name), the fixed-location
+style (`["src/packages/*"]`), and `"filenameLoophole": true` for the companion-file
+pattern (`sub.ts` next to `sub/`).
+
+## 3. CLI surface
 
 ```
-import-lint lsp            # new clap subcommand, stdio only
-└── main loop (lsp_server::Connection::stdio + crossbeam select!)
-    ├── initialize: capabilities = { textDocumentSync: FULL, ... }, serverInfo
-    ├── initialized: register didChangeWatchedFiles for config/tsconfig
-    ├── didOpen(uri, text)    → set_overlay(path, text) + schedule cycle
-    ├── didChange(uri, text)  → set_overlay(path, text) + debounce → cycle
-    ├── didSave(uri)          → cycle now (flushes debounce)
-    ├── didClose(uri)         → clear_overlay(path) + cycle (disk is truth again)
-    ├── didChangeWatchedFiles → ChangeKind::{ConfigChanged,TsconfigChanged,Structural}
-    └── cycle = WatchSession::run_cycle(&changes)
-                → diff full diagnostic set vs published_map
-                → publishDiagnostics per changed file (empty array to clear)
+import-lint init                    # interactive picker (TTY); exit 2 if not a TTY
+import-lint init --preset gradual   # non-interactive, for scripts/CI
+import-lint init --force            # overwrite an existing config in cwd
 ```
 
-Notes:
+- `--preset` is a clap `ValueEnum` — invalid names get clap's native error and the
+  candidates list for free, and the presets self-document in `init --help`.
+- Interactive transcript sketch (stderr):
 
-- **Text sync is FULL**, not incremental — the engine re-extracts a changed file
-  wholesale anyway (~47µs), so incremental sync would only save protocol bytes.
-- **Debounce** is a `select!` timeout arm, no extra thread: pending `ContentEdit`s
-  accumulate and flush after 200ms of quiet (or immediately on save / config
-  change). `run_cycle` already batches multiple changed paths per cycle.
-- The **workspace root** (first workspace folder) is the server's `cwd` for
-  config discovery — same semantics as running the CLI in the project root.
-- **Untitled documents** (no file path) and files outside the project are
-  ignored: no overlay, no diagnostics.
-- The server never touches `notify`: the LSP client watches the config files
-  (E8) and open buffers arrive as protocol events. Files changed *outside* the
-  editor (e.g. `git pull`) are picked up on the next cycle only if a watched
-  event fires — v1 accepts this (documented); a low-frequency full-recheck
-  timer can be added later if it bites.
+  ```
+  Choose a preset:
+    1) standard  — *.package naming convention: directories named foo.package
+                   are encapsulation boundaries; exports are package-scoped
+                   unless @public (recommended for new projects)
+    2) gradual   — annotation-driven: exports stay public until tagged
+                   @package/@private (for adopting on an existing codebase)
+    3) monorepo  — boundaries at packages/*: no relative reach-ins across
+                   workspace packages
+  Preset [1]:
+  ```
 
-## 3. Engine changes: buffer overlays (in `crates/cli`)
+- Known (accepted) behavior change: a lint target literally named `init` now needs
+  `import-lint ./init`, same as the existing `inspect`/`graph`/`lsp` names.
 
-Core `extract()` needs no changes (it already takes `&str`). The work:
+## 4. Implementation shape (`crates/cli/src/init.rs`)
 
-- **`WatchSession` gains overlay methods** — `set_overlay(path, content)`,
-  `clear_overlay(path)` — since the runner internals are `pub(crate)` and must
-  stay behind its API. Overlay entries carry a **monotonic version counter**.
-- **`runner.rs`**: `extract_one()`/`extract_with_cache()` consult the overlay map
-  before `fs::read_to_string`; for overlaid files the mtime/size `ExtractionCache`
-  validity key is replaced by the overlay version (stat-based caching assumes
-  "disk is truth" — the one place needing real design care, see risk R1).
-- **`report.rs`**: `read_cached()` (line/col rendering) must read the same
-  overlay content, or diagnostic positions would be computed against stale disk
-  text while spans came from the buffer.
-- `clear_overlay` re-dirties the file so the next cycle re-extracts from disk.
-
-Non-goal: overlays in the CLI watch mode or one-shot lint — the API exists on
-`WatchSession`, but only the LSP populates it.
-
-## 4. VS Code extension (`editors/vscode/`)
-
-- **Stack**: TypeScript, `vscode-languageclient` (v9+), esbuild single-file
-  bundle, `@vscode/vsce` for packaging. Extension name `ImportLint`; publisher
-  account is a one-time runbook step (reserve `uhyo` or `import-lint`).
-- **Activation**: `onLanguage:{typescript,typescriptreact,javascript,javascriptreact}`
-  + `workspaceContains:**/.importlintrc.{json,jsonc}`; the E9 `enabled` gate then
-  decides whether to actually spawn the server.
-- **Settings**: `importLint.binaryPath` (E6), `importLint.run` (E4),
-  `importLint.enabled` (E9), `importLint.trace.server` (languageclient standard).
-- **Commands**: `importLint.restart` (stop client, re-locate binary, restart —
-  also the recovery path after `npm install` swaps the binary version).
-- **Locator** is a small pure module (input: workspace root, platform, settings;
-  output: binary path or a structured "not found" reason) so it's unit-testable
-  with `node --test`, mirroring the npm shim's testing approach. Reuse the shim's
-  platform-key logic (glibc/musl probe) rather than reimplementing it.
-- WSL2 note (dev environment): under VS Code Remote-WSL the extension runs in
-  the WSL extension host, so `node_modules` resolution and binary spawn are
-  native-Linux — no special handling.
+- `Preset` enum (`clap::ValueEnum` + a description used by both `--help` and the
+  menu), `fn template(Preset) -> &'static str` over three `const` strings.
+- `run_init(cwd, preset: Option<Preset>, force: bool) -> Result<(), InitError>` —
+  the guards from D-I6, the write, the notes. `main.rs` gains a
+  `Command::Init { preset, force }` arm that maps `InitError` to exit `2`,
+  mirroring the other subcommands.
+- `choose_preset(input: impl BufRead, out: impl Write) -> io::Result<Preset>` —
+  the menu as a pure function; the TTY gate lives in the caller only. This seam is
+  what makes the interactive path unit-testable (and swappable for a fancier
+  picker later, see risk R-I3).
+- Zero changes to `crates/core`.
 
 ## 5. Testing strategy
 
-- **Overlay engine tests** (`crates/cli/tests/watch.rs` + unit tests): overlay
-  set/edit/clear cycles, cache-invalidation edges (overlay hides disk edit;
-  clear falls back to disk; version bump forces re-extract), cross-file case
-  (open unsaved `b.ts` re-export change flips a diagnostic in `a.ts`).
-- **LSP protocol tests** (`crates/cli/tests/lsp.rs`): drive the real server loop
-  over `lsp_server::Connection::memory()` — initialize handshake, didOpen →
-  publishDiagnostics, didChange with a violation-introducing edit → diagnostics
-  appear for a *different* file, didClose → reverts to disk state, config-change
-  → republish, clearing semantics (empty array). No editor needed; runs in CI on
-  all three OSes via the normal test job.
-- **Extension**: locator unit tests (`node --test`); a smoke test with
-  `@vscode/test-electron` is stretch goal, not a gate — the protocol tests
-  above cover the server, and the extension is deliberately thin.
-- **Manual gate before first publish**: install the vsix locally, verify
-  end-to-end on the dev machine (WSL2) against a real project.
+- **Template round-trip (unit):** every preset's template must parse via
+  `LintConfig::load` — with `deny_unknown_fields`, any config-schema change that
+  invalidates a template is a red test, not a broken scaffold (D-I4). Also assert
+  the distinguishing options landed (e.g. `standard` really has
+  `defaultImportability: Package` and `packageDirectory: ["**/*.package"]`).
+- **Menu (unit):** `choose_preset` over `Cursor` inputs — picks by number, empty
+  line defaults to `standard`, garbage re-prompts then succeeds, EOF errors.
+- **CLI integration (`crates/cli/tests/init.rs`):** for each preset,
+  `import-lint init --preset X` in a temp dir creates the file **and a follow-up
+  lint run in that fixture succeeds using it** (the real exit criterion); refusal
+  + exit `2` when `.importlintrc.jsonc` or `.json` exists; `--force` overwrites;
+  non-TTY without `--preset` exits `2` with the guidance message. The interactive
+  path is deliberately not e2e-tested (piped stdin never passes the TTY gate) —
+  that's what the `choose_preset` seam is for.
+- **Docs:** README Quick start gains `import-lint init` as step 1; the config
+  section mentions the presets; npm README gets the same one-liner.
 
 ## 6. Risks and mitigations
 
 | # | Risk | Impact | Mitigation |
 |---|---|---|---|
-| R1 | Overlay vs `ExtractionCache` invalidation bug (stale cache hit ⇒ edits silently ignored; over-invalidation ⇒ keystroke thrash) | Wrong diagnostics or lag | Version-counter design in §3, dedicated cache-edge tests in §5; the fast path already re-extracts only changed files, bounding thrash. |
-| R2 | `lsp-types` staleness blocks a needed protocol feature | Feature stall | We use only LSP 3.16-era features (publishDiagnostics, watched files, dynamic registration). If it ever binds, switch to `tower-lsp-server`'s vendored types — server logic is behind our own module boundary. |
-| R3 | Publish-all floods the Problems panel in huge repos | UX noise | It mirrors what the CLI prints today, so it's consistent; if reports demand it, add `importLint.reportClosedFiles: false` later — the diff/publish layer makes that a filter, not a redesign. |
-| R4 | Marketplace auth churn (global Azure DevOps PATs retire Dec 2026) | CI publish breaks | Use a publisher-scoped Marketplace PAT now; note the Entra-ID migration in RELEASING.md so it's a known follow-up, not a surprise. |
-| R5 | Binary/extension version skew (old CLI in node_modules lacks `lsp` subcommand) | Confusing startup failure | Extension runs `import-lint --version` at locate time; if the binary predates the LSP (< the L2 release version), show one clear "upgrade @import-lint/cli" notification instead of spawning. |
-| R6 | Multi-root workspaces silently mislint | Wrong project root | E10: first root wins + explicit warning notification when more roots exist; documented limitation. |
+| R-I1 | Template drift as the config schema evolves | `init` scaffolds a config that fails to load | Round-trip unit test per preset (D-I4); `deny_unknown_fields` makes drift loud. |
+| R-I2 | Preset sprawl / naming bikeshed | Maintenance burden, decision fatigue for users | Presets are curated starting points, not a plugin surface: adding one costs a const + a test row, and there is deliberately no runtime `"extends"` to keep compatible forever. |
+| R-I3 | Numbered menu feels dated next to arrow-key CLIs | UX polish complaints | Fine for three options; if demand materializes, swap the implementation behind `choose_preset` for `dialoguer` — one function, no architectural change. |
+| R-I4 | README example and the `gradual` template drift apart | Docs inconsistency (not breakage) | Editorial: they're adapted from the same text; the round-trip test guards correctness, and a release-checklist line in RELEASING.md covers the prose. |
 
 ## 7. Milestones
 
-**L1 — Buffer overlays in the engine:** §3 complete (`WatchSession`
-overlay API, runner/report plumbing, version-keyed cache bypass), overlay tests
-green, zero behavior change when no overlays are set (existing 158+ tests
-untouched). Exit: cross-file overlay test passes — an unsaved edit in one buffer
-moves a diagnostic in another file.
+**I1 — `init --preset` end-to-end:** subcommand + presets + templates + the D-I6
+guards + unit/integration tests per §5 + README updates. Exit: in a fresh temp
+project, `import-lint init --preset monorepo && import-lint` runs green using the
+generated config on all three CI OSes.
 
-**L2 — `import-lint lsp` server:** §2 complete behind a new clap subcommand;
-protocol integration tests per §5 green on Linux/macOS/Windows CI. Exit: a
-generic LSP client (protocol tests + a manual neovim or VS Code smoke) gets
-live cross-file diagnostics with overlays, config hot-reload, and clean
-publish/clear behavior.
-
-**L3 — VS Code extension:** `editors/vscode/` per §4 — locator + client wiring
-+ settings + restart command, packaged vsix installs and works end-to-end
-locally (WSL2 manual gate). Exit: fresh project + `npm install -D
-@import-lint/cli` + local vsix ⇒ squiggles on violations as you type.
-
-**L4 — Publish & docs:** extension CI (lint/build/test in `ci.yml`),
-`vscode-release.yml` on `vscode-v*` tags (vsce + ovsx, `--skip-duplicate`),
-one-time runbook steps in RELEASING.md (Marketplace publisher + scoped PAT,
-Open VSX namespace + Eclipse agreement), root README "Editor integration"
-section + npm README pointer. Exit: extension live on Marketplace and Open VSX,
-installable by name, docs updated.
+**I2 — interactive picker:** TTY gate + numbered menu + `choose_preset` unit
+tests + docs polish. Exit: manual TTY smoke — bare `import-lint init` in a fresh
+project walks the prompt and scaffolds the `standard` preset.
 
 ## 8. Explicitly out of scope
 
-- Code actions / quick fixes (e.g. "add `@public`"), hover, go-to-definition —
-  future milestone once diagnostics are stable.
-- Pull diagnostics, UTF-8/UTF-32 position-encoding negotiation (E5).
-- Multi-root workspace support beyond first-root-wins (E10).
-- Editor plugins beyond VS Code — the LSP server is editor-agnostic and a
-  README snippet for neovim/helix config is docs work, not a plugin.
-- Native Node bindings (napi-rs) — the process boundary + LSP is the
-  integration surface.
-- JUnit output and opt-in strict checks (`export *`/dynamic import/require) —
-  separate post-v1 ideas, not part of M8.
+- Runtime preset semantics (`"extends": "standard"` resolved at lint time) —
+  presets exist only at scaffold time (D-I2).
+- Project detection: reading package.json `workspaces` to pre-fill
+  `packageDirectory`, tsconfig discovery, framework sniffing (D-I8) — the natural
+  v2 if `init` gets traction.
+- Prompting beyond the single preset question (include dirs, severity, rule
+  options) — the generated file's comments do that job better than a wizard.
+- A VS Code "ImportLint: Initialize" command wrapping `init` — editor work,
+  separate decision.
+- Writing `.importlintrc.json` (comment-free) output — `.jsonc` only (D-I3).

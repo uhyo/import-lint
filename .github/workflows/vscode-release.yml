@@ -29,7 +29,7 @@ jobs:
       - name: npm ci
         run: npm ci
 
-      # Extension releases are decoupled from linter releases (docs/PLAN.md
+      # Extension releases are decoupled from linter releases (docs/PLAN-lsp.md
       # E7) — the tag's version must still match package.json, the same way
       # npm-smoke gates the linter's npm packages against the pushed tag.
       - name: Check tag matches package.json version

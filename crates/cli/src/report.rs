@@ -37,7 +37,7 @@ pub struct ReportResult {
 /// if requested, and produce the final sorted, `--quiet`-filtered diagnostic list.
 /// Source files are read once per file (`source_cache`) to compute line/column from
 /// byte-offset spans — an overlay's content wins over disk for any file `overlays`
-/// covers (L1, `docs/PLAN.md` §3); non-watch callers pass `&Overlays::default()` for
+/// covers (L1, `docs/PLAN-lsp.md` §3); non-watch callers pass `&Overlays::default()` for
 /// no behavior change.
 pub fn build_report(
     module_graph: &ModuleGraph,
@@ -173,7 +173,7 @@ pub fn diagnostics_by_file(
 }
 
 /// `path`'s source text for line/col rendering, cached per report pass: `overlays`'
-/// content wins over disk when it covers `path` (L1, `docs/PLAN.md` §3), matching
+/// content wins over disk when it covers `path` (L1, `docs/PLAN-lsp.md` §3), matching
 /// `runner.rs`'s `extract_one` so a diagnostic's span and its rendered line/col are
 /// always computed against the same text.
 fn read_cached<'a>(

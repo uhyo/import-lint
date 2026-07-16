@@ -158,7 +158,7 @@ the GitHub Release — no tokens, no separate npm runbook step.
 ## VS Code extension release
 
 The VS Code extension (`editors/vscode/`) is released **independently of the
-linter** (docs/PLAN.md E7): its own tags (`vscode-v*`), its own workflow
+linter** (docs/PLAN-lsp.md E7): its own tags (`vscode-v*`), its own workflow
 (`.github/workflows/vscode-release.yml`), and its own version line. This is
 deliberate — the extension is a thin client that runs whatever `import-lint`
 binary the workspace has, so lockstep versioning with the linter would force

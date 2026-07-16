@@ -1,4 +1,4 @@
-//! Shared fixture helpers for `tests/watch.rs` and `tests/lsp.rs` (L2, `docs/PLAN.md`
+//! Shared fixture helpers for `tests/watch.rs` and `tests/lsp.rs` (L2, `docs/PLAN-lsp.md`
 //! §5): both drive the same `WatchSession` engine (directly, or wrapped by the LSP
 //! server), so they share the same "write files + build default session options"
 //! plumbing. Pulled out of `tests/watch.rs` verbatim (no behavior change) when the L2
