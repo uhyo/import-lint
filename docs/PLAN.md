@@ -22,7 +22,7 @@ experience.
 | # | Decision | Rationale |
 |---|---|---|
 | D-I1 | `init` is a subcommand of the existing binary — **`import-lint init [--preset <name>] [--force]`** — and writes `.importlintrc.jsonc` into the **current directory** (which thereby becomes the project root). | Same single-binary distribution story as `lsp` (PLAN-lsp.md E1): no new crate, no new packages, works identically via crates.io, npm shim, and GH-Release binaries. Writing to cwd matches config-discovery semantics exactly (the config file's directory *is* the project root, PLAN-v1.md D7) — no `--dir` flag to reason about. |
-| D-I2 | **Three presets: `standard`, `strict`, `monorepo`** (see §2). A preset is a *scaffold-time template*, not a runtime mode: the generated file is plain config, fully editable, and contains no reference back to the preset (no `"extends"`). | The `jsdoc` rule has two axes that actually distinguish real-world setups (`defaultImportability`, `packageDirectory`); three presets cover them without sprawl. Scaffold-time-only keeps `crates/core` completely untouched — the config model, loader, and LSP know nothing about presets. |
+| D-I2 | **Three presets: `standard`, `gradual`, `monorepo`** (see §2). A preset is a *scaffold-time template*, not a runtime mode: the generated file is plain config, fully editable, and contains no reference back to the preset (no `"extends"`). | The `jsdoc` rule has two axes that actually distinguish real-world setups (`defaultImportability`, `packageDirectory`); three presets cover them without sprawl. Scaffold-time-only keeps `crates/core` completely untouched — the config model, loader, and LSP know nothing about presets. *(Revised in review: default-package is the flagship for new projects, but bare default-package with every directory as a boundary is too strict to recommend — `standard` softens it with the reference plugin's documented ergonomics, see §2.)* |
 | D-I3 | Always write **`.importlintrc.jsonc`**, never `.json`, and every preset's output is **fully commented** — each option annotated the way the README example is. | `.jsonc` wins discovery over `.json` (D7), and comments are the product: the generated file doubles as inline documentation, which is what makes a template better than `{}`. |
 | D-I4 | Templates are **static string constants** in `crates/cli/src/init.rs`, one per preset — no serde serialization, no templating engine. Guard: a unit test parses every template through `LintConfig::load`. | Comments can't come out of `serde_json`, so string constants are forced anyway; the win is that `deny_unknown_fields` turns any future config-schema drift into a red test instead of a scaffold that fails at first lint. |
 | D-I5 | Interactive selection runs when `--preset` is absent **and stdin and stderr are both TTYs**: a hand-rolled **numbered menu** (prompt on stderr, one line read from stdin; empty input = `standard`; invalid input re-prompts; EOF is an error). Non-TTY without `--preset` exits `2` with a "pass `--preset <name>`" message. | No new dependencies: arrow-key pickers (`dialoguer`, `inquire`) need raw terminal mode, which is untestable in CI and overkill for three options. A numbered menu is a pure function over a reader/writer, unit-testable with a `Cursor`. Erroring (rather than silently defaulting) in non-TTY contexts matches the config loader's explicit-over-implicit philosophy; CI/scripts have `--preset`. |
@@ -34,21 +34,24 @@ experience.
 
 | Preset | Distinguishing config | Who it's for |
 |---|---|---|
-| `standard` | All defaults (`defaultImportability: "public"`, `indexLoophole: true`) | Incremental adoption on an existing codebase: nothing is restricted until you tag exports `@package`/`@private`. The generated file is essentially the README example. |
-| `strict` | `"defaultImportability": "package"` | Greenfield code or teams going all-in: every export is package-scoped unless explicitly tagged `@public`. |
-| `monorepo` | `"packageDirectory": ["packages/*"]` (with a comment saying to adjust the globs, e.g. adding `"apps/*"`) | Workspace repos: package boundaries sit at the workspace-package level instead of every directory. |
+| `standard` | `"defaultImportability": "package"` + `"packageDirectory": ["**", "!**/_internal"]` | **New projects (recommended, the picker default): encapsulated by default.** Every export is package-scoped unless tagged `@public`; a directory's `index.ts` is its public interface (the index loophole, on by default, promotes `sub/index.ts` exports to `sub`'s parent — and since a bare re-export resets to `defaultImportability`, exposure cascades deliberately, one level per `index.ts`). The `!**/_internal` negation makes any `_internal/` directory a *non*-boundary that merges into its parent's package, so implementation files can be organized into subfolders without minting new boundaries. |
+| `gradual` | All defaults (`defaultImportability: "public"`, `indexLoophole: true`) | Incremental adoption on an existing codebase: nothing is restricted until you tag exports `@package`/`@private`. The generated file is essentially the README example. |
+| `monorepo` | `"defaultImportability": "package"` + `"packageDirectory": ["packages/*"]` (with a comment saying to adjust the globs, e.g. adding `"apps/*"`) | Workspace repos: boundaries sit at the workspace-package level — deep relative reach-ins across sibling packages (`../../other-pkg/src/…`) become errors unless the export is `@public`, while name-based imports of sibling workspace packages resolve through `node_modules` and stay exempt as external (and `treatSelfReferenceAs` keeps its `"external"` default). Inside one workspace package, imports are unrestricted. |
 
 Each template is a complete, self-describing config: `include`, `exclude`, the
 commented `tsconfig` line, and the full `rules.jsdoc` block with every option
 present (commented out when it's at its default), adapted from the README's config
 example. The preset determines which lines are live and what values they hold —
-nothing else differs.
+nothing else differs. The `standard` template's comments also teach the workflow
+(export → package-private; publish via `index.ts` re-export or `@public`; hide
+helpers in `_internal/`) and carry a commented-out `"filenameLoophole": true` line
+for teams using the companion-file pattern (`sub.ts` next to `sub/`).
 
 ## 3. CLI surface
 
 ```
 import-lint init                    # interactive picker (TTY); exit 2 if not a TTY
-import-lint init --preset strict    # non-interactive, for scripts/CI
+import-lint init --preset gradual   # non-interactive, for scripts/CI
 import-lint init --force            # overwrite an existing config in cwd
 ```
 
@@ -58,9 +61,13 @@ import-lint init --force            # overwrite an existing config in cwd
 
   ```
   Choose a preset:
-    1) standard  — exports are public unless tagged @package/@private (recommended)
-    2) strict    — exports are package-scoped unless tagged @public
-    3) monorepo  — package boundaries at packages/* directories
+    1) standard  — encapsulated by default: exports are package-scoped unless
+                   @public; index.ts is a directory's public interface
+                   (recommended for new projects)
+    2) gradual   — annotation-driven: exports stay public until tagged
+                   @package/@private (for adopting on an existing codebase)
+    3) monorepo  — boundaries at packages/*: no relative reach-ins across
+                   workspace packages
   Preset [1]:
   ```
 
@@ -86,8 +93,8 @@ import-lint init --force            # overwrite an existing config in cwd
 - **Template round-trip (unit):** every preset's template must parse via
   `LintConfig::load` — with `deny_unknown_fields`, any config-schema change that
   invalidates a template is a red test, not a broken scaffold (D-I4). Also assert
-  the distinguishing option landed (e.g. `strict` really has
-  `defaultImportability: Package`).
+  the distinguishing options landed (e.g. `standard` really has
+  `defaultImportability: Package` and the `!**/_internal` negation).
 - **Menu (unit):** `choose_preset` over `Cursor` inputs — picks by number, empty
   line defaults to `standard`, garbage re-prompts then succeeds, EOF errors.
 - **CLI integration (`crates/cli/tests/init.rs`):** for each preset,
@@ -107,7 +114,7 @@ import-lint init --force            # overwrite an existing config in cwd
 | R-I1 | Template drift as the config schema evolves | `init` scaffolds a config that fails to load | Round-trip unit test per preset (D-I4); `deny_unknown_fields` makes drift loud. |
 | R-I2 | Preset sprawl / naming bikeshed | Maintenance burden, decision fatigue for users | Presets are curated starting points, not a plugin surface: adding one costs a const + a test row, and there is deliberately no runtime `"extends"` to keep compatible forever. |
 | R-I3 | Numbered menu feels dated next to arrow-key CLIs | UX polish complaints | Fine for three options; if demand materializes, swap the implementation behind `choose_preset` for `dialoguer` — one function, no architectural change. |
-| R-I4 | README example and `standard` template drift apart | Docs inconsistency (not breakage) | Editorial: they're adapted from the same text; the round-trip test guards correctness, and a release-checklist line in RELEASING.md covers the prose. |
+| R-I4 | README example and the `gradual` template drift apart | Docs inconsistency (not breakage) | Editorial: they're adapted from the same text; the round-trip test guards correctness, and a release-checklist line in RELEASING.md covers the prose. |
 
 ## 7. Milestones
 
@@ -122,7 +129,7 @@ project walks the prompt and scaffolds the `standard` preset.
 
 ## 8. Explicitly out of scope
 
-- Runtime preset semantics (`"extends": "strict"` resolved at lint time) —
+- Runtime preset semantics (`"extends": "standard"` resolved at lint time) —
   presets exist only at scaffold time (D-I2).
 - Project detection: reading package.json `workspaces` to pre-fill
   `packageDirectory`, tsconfig discovery, framework sniffing (D-I8) — the natural
