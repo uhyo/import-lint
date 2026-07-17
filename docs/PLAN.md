@@ -1,118 +1,59 @@
-# ImportLint — Newcomer Documentation Plan (M10)
+# ImportLint — Rule Rename Plan (M11): `jsdoc` → `package-access`
 
-All shipped so far: core linter (M0–M7, [`PLAN-v1.md`](./PLAN-v1.md)), npm
-distribution (N1–N3, [`PLAN-npm.md`](./PLAN-npm.md)), LSP + VS Code extension
-(M8, [`PLAN-lsp.md`](./PLAN-lsp.md)), and the `init` scaffolding subcommand
-(M9, [`PLAN-init.md`](./PLAN-init.md)).
+Prior plans: [`PLAN-v1.md`](./PLAN-v1.md) (M0–M7), [`PLAN-npm.md`](./PLAN-npm.md)
+(N1–N3), [`PLAN-lsp.md`](./PLAN-lsp.md) (M8), [`PLAN-init.md`](./PLAN-init.md)
+(M9), [`PLAN-docs.md`](./PLAN-docs.md) (M10).
 
-**Problem (from the 2026-07-17 docs audit):** the README is reference
-documentation for people who already use `eslint-plugin-import-access`. It
-opens by *comparing* ("same functionality as eslint-plugin-import-access,
-without tsc/ESLint") rather than *teaching*. The `@package` concept, the word
-"package" itself, "importability", the loopholes, and one-hop re-export
-semantics are all used before (or without ever) being defined. There is no
-motivation section, no concrete violation example, no tutorial, and the three
-`init` presets are named but not choosable by someone who doesn't already know
-the convention behind each.
+**Problem:** the only rule is named `jsdoc` — inherited from the ESLint plugin's
+`import-access/jsdoc`. That names the *mechanism* (JSDoc tags) rather than what
+the rule enforces, and clashes with the newcomer framing M10 established
+(packages, boundaries, importability). A newcomer reading
+`"rules": { "jsdoc": ... }` learns nothing about what the rule does.
 
-**Goal:** a developer who has never heard of `eslint-plugin-import-access` (or
-JSDoc access tags at all) can, from the README alone, understand *why* the tool
-exists, see a violation and its fix in 30 seconds of reading, get running with
-`import-lint init`, and find their way to deeper guides. Migrator content
-stays, but stops being the organizing principle.
+**Goal:** the rule is named **`package-access`** in the config file, in every
+diagnostic, and in all docs; a config still using `jsdoc` fails fast with a
+message that says exactly what to change. Ships in the next release (v0.1.3),
+pre-1.0, as a deliberate breaking change.
 
-**Scope (user-locked):** newcomer-first README overhaul + a small in-repo
-guide set under `docs/guides/`. Explicitly **no docs-site infrastructure**
-(no VitePress/mkdocs/GitHub Pages).
-
----
-
-## 1. Decisions (locked)
+## 1. Decisions (locked; naming and back-compat chosen by the project owner)
 
 | # | Decision | Rationale |
 |---|---|---|
-| D-D1 | **README leads with teaching, not comparison.** New section order: pitch (one paragraph, self-contained) → "Why?" (the file-is-the-only-encapsulation-unit problem, adapted from the reference plugin's framing) → a concrete example (real files, a `@package` export, the violating import, the *actual* error output) → Getting started (`init`) → reference sections (flags/config/output/CI/watch/editors) → Migration → Performance/Roadmap. A "already migrating from eslint-plugin-import-access?" jump-link sits right under the pitch so migrators lose nothing. | The audit's core finding: every reader currently pays the migrator tax. Migrators are served by one link; newcomers can't be served by any link if the concept is never taught. |
-| D-D2 | **Three guides in `docs/guides/`**: `concepts.md` (the mental model: packages, importability, boundaries, index/filename loopholes, `packageDirectory`, one-hop re-export semantics — the glossary lives here), `tutorial.md` (hands-on: scaffold with the `standard` preset, create a `foo.package/` boundary, hit a real error, fix it three ways — `@public`, index re-export, move the importer inside), `adoption.md` (preset comparison table + playbooks: greenfield/standard, retrofit/gradual with a phased-annotation strategy, monorepo). | One doc per question a newcomer actually asks: "how does this think?", "show me", "which preset and how do I roll it out?". Three files, flat, no infra (scope lock). `docs/guides/` keeps user docs visibly separate from internal `PLAN*/RELEASING/research`. |
-| D-D3 | **Every command, code sample, and error message shown in any doc must be produced by actually running the workspace binary** and pasted from real output (paths/timing scrubbed). No hypothetical output. | The docs teach by example; a fabricated error string that drifts from `diagnostics.rs` poisons trust. This is the doc-equivalent of M9's template round-trip test — enforced editorially (§3 checklist) rather than in CI. |
-| D-D4 | **Diagrams are ASCII file-trees and annotated code blocks only** — no images, no mermaid. | The domain is directories and imports; a file-tree with arrows in a code fence renders identically on GitHub, crates.io, npmjs.com, and in terminals. The reference plugin's PNGs are its weakest maintenance point. |
-| D-D5 | **README stays a complete standalone reference** (target ≤ ~450 lines): guides deepen, they don't replace. Nothing that exists only in a guide may be *required* to use the tool correctly; config-option one-liners stay in the README and link to `concepts.md` for the "why". | Most readers never leave the README; npm/crates render it as the package page. Guides are for the second sitting. |
-| D-D6 | `npm/import-lint/README.md` and `editors/vscode/README.md` open with the same one-paragraph *teaching* pitch as the root README (not the "port of eslint-plugin-import-access" comparison), then link to the root README. GitHub repo description + npm `description` field get the same treatment (repo description is a manual user step; npm description changes in `npm/import-lint/package.json` ride the next publish). | The audit found the comparison-as-identity problem replicated in every entry point. One pitch, written once, reused verbatim. |
-| D-D7 | **Migration section is kept intact** (content unchanged apart from moving later and gaining the jump-link target). | It's good content for its audience; the problem was placement, not existence. |
+| D-R1 | Config key `rules.jsdoc` → **`rules.package-access`**. Internal Rust names follow (`JsdocRuleConfig` → `PackageAccessRuleConfig`, `JsdocRuleOptions` → `PackageAccessRuleOptions`, etc.), **except** `extract/jsdoc.rs` and other mechanism-level code that genuinely parses JSDoc — the tag syntax is still JSDoc; only the *rule identity* is renamed. | Pre-1.0, `import-lint-core` has no API stability guarantee (RELEASING.md); leaving internal names stale buys nothing. The extract module is correctly named for what it does. |
+| D-R2 | Displayed rule ID becomes **`package-access`** (bare, matching the config key) in all four surfaces: `pretty` output, `--format json` `ruleId`, `--format github` annotations, and the LSP diagnostic code. The `import-access/` prefix was ESLint-plugin namespacing and carries no meaning here. | One name everywhere: what you write in the config is what you see in the diagnostic. |
+| D-R3 | A config containing `rules.jsdoc` is a **hard load error** (exit `2`) with a dedicated hint — `the rule "jsdoc" was renamed to "package-access"; update your config` — not the generic unknown-field error. No alias. | Owner's call: clean break while pre-1.0. The dedicated message makes the break one obvious edit. **Gotcha:** serde `flatten`+`deny_unknown_fields` interplay (serde#1600) is why the rule config already has a hand-written two-pass `Deserialize` — the `jsdoc` special-case must actually fire, with a test proving the exact message, not rely on default unknown-field handling. |
+| D-R4 | Docs sweep under M10's D-D3 rule: every pasted diagnostic containing `import-access/jsdoc` (README example, all three guides, output-formats section) is re-generated from a real run of the renamed binary — not string-substituted. The Migration section gains two bullets: config key mapping (`import-access/jsdoc` ESLint rule → `"package-access"` here) and the `ruleId` change for anyone's CI filters. init.rs templates rename the key; their "identical options to eslint-plugin-import-access's `import-access/jsdoc` rule" comments stay (still true, and now they carry the lineage the rule name no longer does). | The M10 docs are the product surface this rename exists to serve; letting them drift on day one would be absurd. |
+| D-R5 | Conformance snapshots under `tests/conformance/` are the **oracle** (real ESLint-plugin output) and are never regenerated. If the harness compares rule IDs, it gains a normalization step; expected-output fixtures that are *ours* (not oracle) are updated. | The oracle's value is that it wasn't produced by us. |
 
-## 2. Content requirements (what "done" means per doc)
+## 2. Blast radius (from the pre-plan grep)
 
-- **README pitch:** must be understandable with zero prior context — defines
-  the idea (mark an export `@package` to keep it inside its directory-package)
-  in the first two sentences; mentions speed and the no-tsc/no-ESLint design as
-  *properties*, not as the identity.
-- **README "Why?":** the encapsulation-stops-at-the-file problem, ~3 short
-  paragraphs max, ending with "ImportLint adds a directory-level layer".
-- **README example:** one file-tree + two code snippets + the real `pretty`
-  diagnostic, then the one-line fix. Must fit on one screen.
-- **concepts.md:** defines, in order, with an example each: *package*,
-  *importability* (`@public`/`@package`/`@private` + `defaultImportability`),
-  *package directory* (default parent-dir behavior vs `packageDirectory`
-  globs, incl. the `*.package` convention), *index loophole* (incl. the
-  promotion-cascades-one-level-at-a-time behavior), *filename loophole*,
-  *re-exports and one-hop semantics* (a bare re-export resets to
-  `defaultImportability`; the re-export's own JSDoc governs), what counts as
-  *external* (never checked) vs *internal*. Semantics must match the shipped
-  rule engine — derive examples from `crates/cli/tests/` fixtures and verify
-  per D-D3.
-- **tutorial.md:** every step copy-pasteable in an empty directory; total time
-  ~10 minutes; ends with the reader having seen error → three distinct fixes →
-  green run, plus a "where next" footer (concepts, adoption).
-- **adoption.md:** a comparison table a newcomer can choose from (what's a
-  boundary, what's restricted by default, best for), then one playbook per
-  preset; the `gradual` playbook must give an actual phasing strategy
-  (annotate one directory, `--format` in CI, ratchet).
+- `crates/core`: `config.rs` (key + hand-written Deserialize + D-R3 error),
+  `lib.rs` re-exports, `rule/options.rs`, `rule/mod.rs` naming.
+- `crates/cli`: `report.rs:151`, `output/pretty.rs:117`, `output/eslint_json.rs:126`,
+  `output/github.rs:55` (hardcoded rule ID ×4 + their tests), `setup.rs`,
+  `init.rs` templates ×3, LSP diagnostic code (check `lsp/convert.rs`).
+- Tests: `cli.rs`, `lsp.rs`, `watch.rs`, `conformance.rs` (D-R5),
+  `init.rs` round-trip assertions, `core/tests/extract_forms.rs`.
+- Docs: `README.md`, `docs/guides/{concepts,tutorial,adoption}.md`
+  (config blocks, prose "the `jsdoc` rule", and every pasted diagnostic),
+  `docs/RELEASING.md` prose-sync item mentions. `npm`/vscode READMEs don't
+  name the rule — verify, don't assume.
 
-## 3. Verification checklist (release-gate for each milestone)
+## 3. Milestone
 
-1. Every shell block ran verbatim against the current workspace binary; every
-   diagnostic shown is pasted real output.
-2. Every config snippet parses (`import-lint --config <snippet>` on a temp
-   copy, or via an `init`-generated base).
-3. Every claimed behavior (loophole promotion, one-hop reset, external
-   exemption) is demonstrated by a fixture that was actually run.
-4. Terms are defined at first use in each doc (docs are entered independently
-   via search).
-5. All cross-links resolve on GitHub (relative paths from each file's own
-   location; remember npm/crates render the README *outside* the repo — links
-   from the root README to `docs/guides/*` must be absolute GitHub URLs, same
-   as the existing Migration-section convention if one exists, else
-   `https://github.com/uhyo/import-lint/blob/master/...`).
-6. `cargo test --workspace` still green (docs-only, but the RELEASING.md R-I4
-   prose-sync rule now extends to: README config example ↔ `gradual` template
-   ↔ any config shown in guides).
+**R1 (single):** everything in §1–§2, plus: a config-load test asserting the
+D-R3 message verbatim; `cargo fmt`/`clippy -D warnings`/`cargo test --workspace`
+green; `node --test npm/import-lint/test/*.test.js` green; docs diagnostics
+re-verified per D-R4. Exit: `import-lint init --preset standard && import-lint`
+green in a temp dir with the new key; a config with `rules.jsdoc` exits `2`
+printing the hint; `grep -r "import-access/jsdoc"` in the repo hits only the
+lineage comments/migration prose that intentionally reference the ESLint rule,
+and `"jsdoc"` as a config key appears nowhere outside archived plans.
 
-## 4. Risks
+## 4. Out of scope
 
-| # | Risk | Mitigation |
-|---|---|---|
-| R-D1 | Subtle-semantics errors in `concepts.md` (one-hop, loophole cascade) | D-D3 run-everything rule; examples derived from conformance fixtures; final review by the project lead against the rule-engine source. |
-| R-D2 | README bloat (teaching added, nothing removed) | D-D5 line budget; the deep option-reasoning moves to `concepts.md`, terse one-liners remain. |
-| R-D3 | Relative links broken on npm/crates package pages | §3.5 absolute-URL rule for README→guides links. |
-| R-D4 | Guides drift as options evolve | Guides carry a "documents behavior as of vX.Y.Z" line; RELEASING.md checklist item extended (§3.6). |
-
-## 5. Milestones
-
-**D1 — guides:** `docs/guides/{concepts,tutorial,adoption}.md` per §2, all
-examples verified per §3. Exit: a reviewer can execute `tutorial.md` top to
-bottom in an empty temp dir and every output matches.
-
-**D2 — README overhaul + peripheral pitches:** root README restructured per
-D-D1/D-D5 with links into the guides; npm + vscode READMEs and npm package
-`description` per D-D6; RELEASING.md checklist extension (§3.6). Exit: the
-audit's §C gap list re-checked — each of the 8 gaps has a concrete answer;
-README ≤ ~450 lines; migration content intact behind the jump-link.
-
-## 6. Out of scope
-
-- Docs website / GitHub Pages (user-locked).
-- Screenshots, GIFs, images of any kind (D-D4).
-- Translating docs (the reference plugin has Japanese docs; nothing here yet).
-- A `docs/` restructure of internal files (`PLAN*`, `RELEASING`, `benchmarks`
-  stay where they are).
-- CI enforcement of doc examples (editorial checklist only, v2 idea: a
-  doc-snippet extraction test).
+- Any alias/deprecation window for `jsdoc` (owner chose hard break).
+- Renaming JSDoc-mechanism internals (`extract/jsdoc.rs`) or the accepted tag
+  spellings (`@package`, `/** @access package */` are syntax, not rule name).
+- Renaming diagnostics' message texts (still exact ESLint-plugin parity).
+- A config auto-migrator (`import-lint migrate-config`) — the fix is one line.
