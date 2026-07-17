@@ -1,9 +1,17 @@
 # @import-lint/cli
 
-A fast standalone linter enforcing JSDoc `@public`/`@package`/`@private` import
-access rules in TypeScript/JavaScript projects — a drop-in replacement for
-[`eslint-plugin-import-access`](https://github.com/uhyo/eslint-plugin-import-access)
-that doesn't need ESLint or a TypeScript type-check to run.
+ImportLint enforces directory-level encapsulation in TypeScript and
+JavaScript: tag an export `@package` in its JSDoc, and only files in that
+directory (or nested below it) — its "package" — can import it; ImportLint flags every
+import that breaks the rule. It's a small, fast Rust CLI, so it runs
+without a TypeScript compiler or ESLint, and stays fast on large codebases
+(it's a drop-in replacement for
+[`eslint-plugin-import-access`](https://github.com/uhyo/eslint-plugin-import-access)).
+
+See the [main repository README](https://github.com/uhyo/import-lint#readme)
+for the full pitch, a concrete example, and the
+[guides](https://github.com/uhyo/import-lint/tree/master/docs/guides) —
+this page covers just installing and running this package.
 
 This package installs the `import-lint` CLI. It's a thin launcher that execs a
 prebuilt native binary for your platform (installed automatically via
@@ -44,11 +52,9 @@ npx import-lint --format github
 ```
 
 See [Using in CI](https://github.com/uhyo/import-lint#using-in-ci) in the main
-repository README for a full workflow example.
-
-See the [main repository README](https://github.com/uhyo/import-lint#readme)
-for the full CLI reference, config file format, output formats, watch mode,
-and the migration guide from `eslint-plugin-import-access`.
+repository README for a full workflow example — also see there for the full
+CLI reference, config file format, output formats, watch mode, and the
+migration guide from `eslint-plugin-import-access`.
 
 ## Editor integration
 

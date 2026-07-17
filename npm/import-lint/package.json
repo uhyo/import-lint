@@ -1,7 +1,7 @@
 {
   "name": "@import-lint/cli",
   "version": "0.0.0",
-  "description": "A fast standalone linter enforcing JSDoc @package/@private import access rules in TypeScript/JavaScript projects (a port of eslint-plugin-import-access)",
+  "description": "Enforces directory-level encapsulation in TypeScript/JavaScript: tag an export @package and only files in or below its directory can import it. Fast Rust CLI, no TypeScript compiler or ESLint needed (a port of eslint-plugin-import-access)",
   "keywords": [
     "lint",
     "linter",

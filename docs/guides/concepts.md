@@ -24,18 +24,22 @@ in the sentence right above the code block).
 ## Package
 
 A **package**, in ImportLint's vocabulary, has nothing to do with an npm
-package — it's the unit of encapsulation the tool checks: by default, a
-package is a directory. Every file in that directory (not its
-subdirectories, unless a loophole applies — see below) is "in the same
-package". An export tagged for package-only visibility can be imported by
-any file in its own package, and by nothing else.
+package — it's the unit of encapsulation the tool checks. By default, a
+file's package is its own containing directory *together with every
+directory nested inside it, at any depth*: an export tagged for
+package-only visibility is importable from its own directory or from any
+subdirectory of that directory, but not from a parent directory or a
+sibling directory. The relationship only runs one way — inward and
+downward, never outward and up.
 
 ```
 src/
 ├── cart/
-│   ├── total.ts     ── exports computeTotal, tagged @package
-│   └── checkout.ts  ── same directory: can import computeTotal
-└── receipt.ts       ── different directory: cannot
+│   ├── total.ts        ── exports computeTotal, tagged @package
+│   ├── checkout.ts     ── same directory: can import computeTotal
+│   └── promo/
+│       └── discount.ts  ── nested subdirectory: can ALSO import computeTotal
+└── receipt.ts            ── parent directory: cannot
 ```
 
 `src/cart/total.ts`:
@@ -47,7 +51,17 @@ export function computeTotal(items: number[]): number {
 }
 ```
 
-`src/receipt.ts`:
+`src/cart/promo/discount.ts` — two directories below `total.ts`:
+
+```ts
+import { computeTotal } from "../total";
+
+export function discountedTotal(items: number[]): number {
+  return computeTotal(items) * 0.9;
+}
+```
+
+`src/receipt.ts` — a sibling of `cart/`, not nested inside it:
 
 ```ts
 import { computeTotal } from "./cart/total";
@@ -55,9 +69,10 @@ import { computeTotal } from "./cart/total";
 console.log(computeTotal([1, 2, 3]));
 ```
 
-`src/cart/checkout.ts` importing `computeTotal` from `./total` is fine — same
-directory, same package. `src/receipt.ts` is outside `src/cart/`, so it gets
-a real diagnostic:
+`src/cart/checkout.ts` (same directory) and `src/cart/promo/discount.ts`
+(nested two levels down) both import `computeTotal` cleanly. `src/receipt.ts`
+is outside `src/cart/` entirely — not the same directory, and not nested
+inside it — so it's the only one that gets a diagnostic:
 
 ```
 src/receipt.ts
@@ -65,6 +80,13 @@ src/receipt.ts
 
 ✖ 1 problem (1 error, 0 warnings)
 ```
+
+The asymmetry matters: if `discount.ts` (nested inside `cart/`) exported
+something `@package`, `checkout.ts` (in `cart/` itself, an *ancestor* of
+`discount.ts`'s directory) could **not** import it — only `promo/`'s own
+directory or something nested even deeper inside `promo/` could. Visibility
+flows from an ancestor directory down into its descendants, never from a
+descendant back up or sideways to a sibling.
 
 Where a file's package boundary actually sits — directory-by-default, or
 something else — is configurable; see [Package directory](#package-directory)
@@ -146,11 +168,14 @@ restrictive-by-default* — the `standard` preset in
 
 ## Package directory
 
-By default a file's package is simply its containing directory (as shown
-above). The `packageDirectory` option replaces that with a set of glob
-patterns identifying which *ancestor* directories count as package
-boundaries — every file under one of those directories, at any depth, is in
-the same package, and nothing outside is.
+By default a file's package is its own directory plus everything nested
+inside it (as shown above). The `packageDirectory` option replaces that
+with a set of glob patterns identifying which *ancestor* directories count
+as package boundaries — every file under one of those directories, at any
+depth, is in the same package, and nothing outside is (unless a *different*
+`packageDirectory` boundary is nested inside the first one — see the note
+at the end of [Index loophole](#index-loophole) below, where that
+distinction actually matters).
 
 Each pattern is matched against both a candidate directory's **basename**
 and its **project-relative path**, so a pattern like `"**/*.package"` matches
@@ -271,6 +296,16 @@ one level further out, to `src/` — and even then, only through
 step of wider exposure is a separate, visible edit to an `index.ts` file —
 "cascades one deliberate level at a time" means exactly this: nobody can
 widen visibility by two levels with one line.
+
+**Nested boundaries still nest for plain containment, independent of any of
+this.** A file *inside* `secrets.package` can freely import an unrelated
+`@package` export tagged directly on a file in `auth.package` itself — no
+re-export, no index loophole, no promotion needed — because `secrets.package`
+is nested inside `auth.package` (see [Package](#package) above: visibility
+flows inward and downward). The reverse doesn't hold: a file directly in
+`auth.package` cannot reach a `@package` export tagged directly inside
+`secrets.package`, only through whatever `secrets.package/index.ts` chooses
+to bare-re-export, per the cascade above.
 
 ## Filename loophole
 

@@ -1,12 +1,19 @@
 # ImportLint for VS Code
 
-Real-time [ImportLint](https://github.com/uhyo/import-lint) diagnostics for
-TypeScript and JavaScript, powered by the `import-lint lsp` language server.
+ImportLint enforces directory-level encapsulation in TypeScript and
+JavaScript: tag an export `@package` in its JSDoc, and only files in that
+directory (or nested below it) — its "package" — can import it; ImportLint flags every
+import that breaks the rule. It's a small, fast Rust CLI, so it runs
+without a TypeScript compiler or ESLint, and stays fast on large codebases
+(it's a drop-in replacement for
+[`eslint-plugin-import-access`](https://github.com/uhyo/eslint-plugin-import-access)).
 
-ImportLint enforces `@package`/`@private` JSDoc import-access rules (a port of
-[`eslint-plugin-import-access`](https://github.com/qlaffont/eslint-plugin-import-access))
-so that modules can restrict who is allowed to import them — including
-detecting violations introduced in files you haven't even opened yet.
+This extension shows real-time diagnostics for TypeScript and JavaScript,
+powered by the `import-lint lsp` language server — including detecting
+violations introduced in files you haven't even opened yet. See the
+[main repository README](https://github.com/uhyo/import-lint#readme) and
+[guides](https://github.com/uhyo/import-lint/tree/master/docs/guides) for
+the full pitch and mental model.
 
 ## Requirements
 

@@ -3,24 +3,92 @@
 [![crates.io](https://img.shields.io/crates/v/import-lint.svg)](https://crates.io/crates/import-lint)
 [![npm](https://img.shields.io/npm/v/%40import-lint%2Fcli.svg)](https://www.npmjs.com/package/@import-lint/cli)
 
-A standalone Rust CLI linter for JavaScript and TypeScript that checks module-boundary
-import access — the same functionality as
-[`eslint-plugin-import-access`](https://github.com/uhyo/eslint-plugin-import-access),
-without depending on the TypeScript compiler or ESLint.
+ImportLint enforces directory-level encapsulation in TypeScript and
+JavaScript: tag an export `@package` in its JSDoc, and only files in that
+directory (or nested below it) — its "package" — can import it; ImportLint flags every
+import that breaks the rule. It's a small, fast Rust CLI, so it runs
+without a TypeScript compiler or ESLint, and stays fast on large codebases.
 
-It reads JSDoc `@public`/`@package`/`@private` tags on your exports and flags imports
-that cross a boundary they shouldn't: a `@private` export can only be imported from
-its own file's package (directory, by default); a `@package` export can only be
-imported from within the same "package" as the file that exports it.
+**Already migrating from `eslint-plugin-import-access`?** Jump straight to
+[Migration](#migration-from-eslint-plugin-import-access) — this README
+teaches ImportLint from scratch first.
 
-Built on the [oxc](https://oxc.rs) toolchain for parsing and module resolution, so it
-stays fast on large codebases without needing a full TypeScript type-check.
+## Why?
+
+The largest unit of encapsulation TypeScript and JavaScript actually
+enforce is the file: something you don't export is invisible outside it,
+but the moment you export it, it's visible — and importable — from
+anywhere in the project. There's no built-in way to say "this is shared
+between these five files, but not the rest of the codebase."
+
+That gap pushes real projects toward workarounds nobody's actually
+enforcing: oversized files (to keep more logic behind the one boundary that
+does exist), `_internal`-style naming conventions a code review has to
+catch by eye, or index files that gesture at a public surface without
+anyone checking that the rest of the module respects it. None of these get
+more reliable as a project grows — they get less.
+
+ImportLint adds a directory-level layer on top of the file: tag an export
+`@package` and it's importable only from its own directory and directories
+nested inside it (or a boundary you name explicitly — see
+[`packageDirectory`](#config-file) below); tag it `@private` and it's not
+importable from anywhere outside its own file, not even the rest of its
+directory. The check needs neither a TypeScript program nor ESLint and runs
+in milliseconds, so nothing stops you from enforcing it on every keystroke
+or in CI.
+
+## Example
+
+```
+src/
+├── cart/
+│   └── total.ts     ── computeTotal(), tagged @package
+└── receipt.ts        ── imports computeTotal from outside cart/
+```
+
+`src/cart/total.ts`:
+
+```ts
+/** @package */
+export function computeTotal(items: number[]): number {
+  return items.reduce((a, b) => a + b, 0);
+}
+```
+
+`src/receipt.ts`:
+
+```ts
+import { computeTotal } from "./cart/total";
+
+console.log(computeTotal([1, 2, 3]));
+```
+
+No config file needed — this works with ImportLint's defaults:
+
+```
+$ import-lint .
+src/receipt.ts
+  1:10  error  Cannot import a package-private export 'computeTotal'  import-access/jsdoc
+
+✖ 1 problem (1 error, 0 warnings)
+```
+
+The fix is one line: tag `computeTotal` `@public` instead, if it's meant to
+be used from anywhere — or leave it `@package` and move `receipt.ts` inside
+`cart/`, if it isn't. Either way, the next run is clean, with no output.
+
+For the full mental model, see the
+[Concepts guide](https://github.com/uhyo/import-lint/blob/master/docs/guides/concepts.md);
+for a longer walkthrough, see the
+[Tutorial](https://github.com/uhyo/import-lint/blob/master/docs/guides/tutorial.md).
 
 ## Project Status
 
 Treat this as a **beta product** until it reaches v1.0.0. This is Vibe Coded; this is supposed to work exactly like `eslint-plugin-import-access` which has already been proven useful in production. We believe it works and it's 100x faster than the ESLint plugin.
 
-## Installation
+## Getting started
+
+### Install
 
 **npm** (recommended for JS/TS projects):
 
@@ -48,11 +116,10 @@ To build from a local checkout instead:
 cargo install --path crates/cli --locked
 ```
 
-## Quickstart
+### Configure and run
 
 ```sh
 # Installed via npm? Prefix these with npx, e.g. `npx import-lint`.
-# (npm shim: npx @import-lint/cli init)
 
 # Scaffold a .importlintrc.jsonc, interactively or via --preset.
 import-lint init
@@ -71,7 +138,25 @@ With no config file, ImportLint lints `.` with the `jsdoc` rule at `error` sever
 and every option at its default (identical to `eslint-plugin-import-access`'s
 defaults — see [Migration](#migration-from-eslint-plugin-import-access)).
 `import-lint init` scaffolds a fully commented starting point instead of hand-writing
-one — see [Config file](#config-file) for the three presets it offers.
+one, from one of three presets — see [Config file](#config-file) below, and the
+[Adoption guide](https://github.com/uhyo/import-lint/blob/master/docs/guides/adoption.md)
+for which one fits your project and how to roll it out.
+
+### Guides
+
+[`docs/guides/`](https://github.com/uhyo/import-lint/tree/master/docs/guides)
+has three short guides for the second sitting — this README stays a
+complete reference on its own:
+
+- [**Concepts**](https://github.com/uhyo/import-lint/blob/master/docs/guides/concepts.md) —
+  the mental model: importability, package directories, both loopholes,
+  one-hop re-export semantics, external vs. internal.
+- [**Tutorial**](https://github.com/uhyo/import-lint/blob/master/docs/guides/tutorial.md) —
+  a ~10-minute walkthrough: create a boundary, hit a violation, fix it three
+  different ways.
+- [**Adoption**](https://github.com/uhyo/import-lint/blob/master/docs/guides/adoption.md) —
+  choosing a preset and rolling it out, including a phased strategy for an
+  existing codebase.
 
 ## CLI flags
 
@@ -112,6 +197,8 @@ until tagged `@package`/`@private`; for adopting on an existing codebase), and
 `monorepo` (boundaries at `packages/*`: no relative reach-ins across workspace
 packages). A preset only picks starting values for the `jsdoc` options below — the
 generated file is plain, fully editable config with no reference back to the preset.
+See the [Adoption guide](https://github.com/uhyo/import-lint/blob/master/docs/guides/adoption.md)
+for a comparison and a rollout playbook per preset.
 
 ImportLint looks for `.importlintrc.jsonc` (or `.importlintrc.json`, if no `.jsonc`
 file exists in the same directory) starting at the current directory and walking
@@ -120,6 +207,11 @@ directory containing the config file becomes the project root**: `include`,
 `exclude`, and `tsconfig` are all resolved relative to it. With no config file
 found, ImportLint uses the defaults below with the project root set to the current
 directory.
+
+The options below are the levers behind the concepts explained in the
+[Concepts guide](https://github.com/uhyo/import-lint/blob/master/docs/guides/concepts.md) —
+this is the quick reference; that guide is the "why", with a worked example per
+option.
 
 ```jsonc
 // .importlintrc.jsonc
@@ -285,6 +377,32 @@ walks into it) — a `node_modules` change never triggers a re-run. Reinstalling
 dependencies or editing a linked/workspace package under `node_modules` requires
 restarting `import-lint --watch` manually.
 
+## Editor integration
+
+The [ImportLint VS Code extension](https://marketplace.visualstudio.com/items?itemName=uhyo.import-lint)
+(`uhyo.import-lint`, also on [Open VSX](https://open-vsx.org/extension/uhyo/import-lint))
+shows violations as you type, including cross-file ones — a change in a file
+you haven't opened can surface a diagnostic in a file that imports it. It
+needs no extra install beyond `npm install -D @import-lint/cli`: the
+extension finds the workspace binary automatically (`importLint.binaryPath`
+overrides this, and `PATH` is the fallback). It activates automatically when
+an `.importlintrc.json(c)` is present (`importLint.enabled` forces it on or
+off), and `importLint.run` controls whether it lints on every keystroke
+(`onType`, the default) or only on save (`onSave`).
+
+**Other editors:** the same binary speaks [LSP](https://microsoft.github.io/language-server-protocol/)
+over stdio via `import-lint lsp`. For Neovim (0.11+, using `vim.lsp.config`/
+`vim.lsp.enable`):
+
+```lua
+vim.lsp.config('import_lint', {
+  cmd = { 'import-lint', 'lsp' },
+  filetypes = { 'javascript', 'javascriptreact', 'typescript', 'typescriptreact' },
+  root_markers = { '.importlintrc.jsonc', '.importlintrc.json', '.git' },
+})
+vim.lsp.enable('import_lint')
+```
+
 ## Migration from eslint-plugin-import-access
 
 ImportLint's `jsdoc` rule is a behavioral port of the plugin's `import-access/jsdoc`
@@ -332,32 +450,6 @@ machine details, and reproduction commands):
 
 Reproduce with `scripts/bench.sh` (add `--compare-eslint` for the ESLint
 comparison) and `cargo bench -p import-lint-core --bench extract`.
-
-## Editor integration
-
-The [ImportLint VS Code extension](https://marketplace.visualstudio.com/items?itemName=uhyo.import-lint)
-(`uhyo.import-lint`, also on [Open VSX](https://open-vsx.org/extension/uhyo/import-lint))
-shows violations as you type, including cross-file ones — a change in a file
-you haven't opened can surface a diagnostic in a file that imports it. It
-needs no extra install beyond `npm install -D @import-lint/cli`: the
-extension finds the workspace binary automatically (`importLint.binaryPath`
-overrides this, and `PATH` is the fallback). It activates automatically when
-an `.importlintrc.json(c)` is present (`importLint.enabled` forces it on or
-off), and `importLint.run` controls whether it lints on every keystroke
-(`onType`, the default) or only on save (`onSave`).
-
-**Other editors:** the same binary speaks [LSP](https://microsoft.github.io/language-server-protocol/)
-over stdio via `import-lint lsp`. For Neovim (0.11+, using `vim.lsp.config`/
-`vim.lsp.enable`):
-
-```lua
-vim.lsp.config('import_lint', {
-  cmd = { 'import-lint', 'lsp' },
-  filetypes = { 'javascript', 'javascriptreact', 'typescript', 'typescriptreact' },
-  root_markers = { '.importlintrc.jsonc', '.importlintrc.json', '.git' },
-})
-vim.lsp.enable('import_lint')
-```
 
 ## Roadmap
 
