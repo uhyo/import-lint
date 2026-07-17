@@ -52,6 +52,10 @@ cargo install --path crates/cli --locked
 
 ```sh
 # Installed via npm? Prefix these with npx, e.g. `npx import-lint`.
+# (npm shim: npx @import-lint/cli init)
+
+# Scaffold a .importlintrc.jsonc, interactively or via --preset.
+import-lint init
 
 # Lint the current directory (or your config's `include` roots).
 import-lint
@@ -66,6 +70,8 @@ import-lint --format json
 With no config file, ImportLint lints `.` with the `jsdoc` rule at `error` severity
 and every option at its default (identical to `eslint-plugin-import-access`'s
 defaults — see [Migration](#migration-from-eslint-plugin-import-access)).
+`import-lint init` scaffolds a fully commented starting point instead of hand-writing
+one — see [Config file](#config-file) for the three presets it offers.
 
 ## CLI flags
 
@@ -85,7 +91,9 @@ import-lint [paths...]
 | `--watch` | Watch mode: re-lint on file changes — see [Watch mode](#watch-mode). | off |
 | `--watch-poll [ms]` | Watch mode using a polling watcher. Implies `--watch`. | off |
 
-Two debug subcommands are also available (not part of the stable output contract):
+`import-lint init [--preset <name>] [--force]` scaffolds `.importlintrc.jsonc`
+into the current directory — see [Config file](#config-file). Two debug
+subcommands are also available (not part of the stable output contract):
 `import-lint inspect <file>` dumps one file's extracted module info as JSON;
 `import-lint graph [paths...]` dumps the discovery+resolution graph as JSON.
 
@@ -94,6 +102,16 @@ Flag resolution order is **CLI flag > config file > built-in default**. Rule opt
 config file — see below.
 
 ## Config file
+
+Run `import-lint init` to scaffold one instead of hand-writing it: interactively
+(a numbered picker, if run in a terminal) or non-interactively via
+`--preset <name>`. Three presets are available — `standard` (the `*.package`
+naming convention: directories named `foo.package` are encapsulation boundaries;
+recommended for new projects), `gradual` (annotation-driven: exports stay public
+until tagged `@package`/`@private`; for adopting on an existing codebase), and
+`monorepo` (boundaries at `packages/*`: no relative reach-ins across workspace
+packages). A preset only picks starting values for the `jsdoc` options below — the
+generated file is plain, fully editable config with no reference back to the preset.
 
 ImportLint looks for `.importlintrc.jsonc` (or `.importlintrc.json`, if no `.jsonc`
 file exists in the same directory) starting at the current directory and walking
