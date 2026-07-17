@@ -1,6 +1,6 @@
 # Concepts
 
-Documents ImportLint v0.1.2.
+Documents ImportLint v0.1.3.
 
 ImportLint enforces directory-level encapsulation for TypeScript and
 JavaScript: it reads JSDoc access tags on your `export` statements and flags

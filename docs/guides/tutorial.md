@@ -1,6 +1,6 @@
 # Tutorial: your first boundary
 
-Documents ImportLint v0.1.2.
+Documents ImportLint v0.1.3.
 
 This is a hands-on, ~10-minute walkthrough: create one encapsulation
 boundary, trigger a real violation, and fix it three different ways. It
@@ -9,10 +9,10 @@ explained inline — for the concepts behind each step, see
 [`concepts.md`](./concepts.md).
 
 Every command and every diagnostic below is real, pasted output from running
-the tool — not a hypothetical. Commands are shown as `npx @import-lint/cli`
-(the way you'd run them via npm, with no global install); this was verified
-against the identical workspace build of the CLI, since v0.1.2 has no
-behavioral difference between the two.
+the tool — not a hypothetical (absolute paths are shown project-relative).
+Commands are shown as `npx @import-lint/cli` (the way you'd run them via
+npm, with no global install); they were verified against the identical
+workspace build of the CLI.
 
 ## Setup
 
@@ -24,24 +24,28 @@ into it:
 mkdir import-lint-tutorial && cd import-lint-tutorial
 ```
 
-Write a config file by hand. `import-lint init` (see below) will offer to
-scaffold this for you starting with the next release — the presets it
-generates ship after v0.1.2, so this tutorial writes the equivalent by hand:
-it's the `standard` preset (the `*.package` naming convention, recommended
-for new projects), trimmed to the options that matter for this walkthrough.
+Scaffold the config with the `standard` preset (the `*.package` naming
+convention, recommended for new projects):
+
+```sh
+npx @import-lint/cli init --preset standard
+```
+
+```
+Wrote .importlintrc.jsonc (preset: standard)
+```
+
+(Run `init` with no flags for an interactive picker instead.) The generated
+file is fully commented — every option annotated in place. The two options
+that drive this walkthrough:
 
 ```jsonc
-// .importlintrc.jsonc
-//
-// Equivalent to `import-lint init --preset standard`, trimmed for a tutorial.
 // Convention: any directory named "foo.package" is an encapsulation boundary.
 // Everything inside it imports freely from everything else inside it; nothing
 // outside can import an export unless it's tagged `@public`.
 {
   "rules": {
     "package-access": {
-      "severity": "error",
-
       // Every export is package-scoped by default (no JSDoc tag needed).
       "defaultImportability": "package",
 
@@ -51,10 +55,6 @@ for new projects), trimmed to the options that matter for this walkthrough.
   }
 }
 ```
-
-(Once `init` ships presets in a release, `npx @import-lint/cli init --preset
-standard` does this for you non-interactively — or run `npx @import-lint/cli
-init` with no flags for an interactive picker.)
 
 ## Make a boundary
 

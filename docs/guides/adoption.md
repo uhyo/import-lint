@@ -1,6 +1,6 @@
 # Adoption
 
-Documents ImportLint v0.1.2.
+Documents ImportLint v0.1.3.
 
 ImportLint's `package-access` rule reads JSDoc access tags (`@public`/`@package`/
 `@private`) on your exports and flags imports that cross a directory-level
@@ -25,9 +25,7 @@ binary.
 | `gradual` | Every plain directory (no `packageDirectory` set) | Nothing — every export is public until you tag it (`defaultImportability: "public"`, every other option at its default) | Adopting on an existing codebase without breaking the build on day one. |
 | `monorepo` | Each `packages/*` workspace package (`packageDirectory: ["packages/*"]`) | Everything inside a package (`defaultImportability: "package"`) — but only for *relative* reach-ins; a sibling package imported *by name* is exempt | Monorepos where the workspace package, not the directory, is the real unit of ownership. |
 
-Scaffold any of them (once your ImportLint version ships presets — see the
-note in [`tutorial.md`](./tutorial.md#setup); until then, copy the config
-blocks below by hand):
+Scaffold any of them:
 
 ```sh
 import-lint init --preset standard   # or: gradual, monorepo
