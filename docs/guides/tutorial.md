@@ -24,8 +24,8 @@ into it:
 mkdir import-lint-tutorial && cd import-lint-tutorial
 ```
 
-Scaffold the config with the `standard` preset (the `*.package` naming
-convention, recommended for new projects):
+Scaffold the config with the `standard` preset — the recommended
+package-by-default setup, built on the `*.package` naming convention:
 
 ```sh
 npx @import-lint/cli init --preset standard

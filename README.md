@@ -4,10 +4,11 @@
 [![npm](https://img.shields.io/npm/v/%40import-lint%2Fcli.svg)](https://www.npmjs.com/package/@import-lint/cli)
 
 ImportLint enforces directory-level encapsulation in TypeScript and
-JavaScript: tag an export `@package` in its JSDoc, and only files in that
-directory (or nested below it) — its "package" — can import it; ImportLint flags every
-import that breaks the rule. It's a small, fast Rust CLI, so it runs
-without a TypeScript compiler or ESLint, and stays fast on large codebases.
+JavaScript: a directory is a "package", and its exports are importable
+only from files inside it (or nested below it) until you tag one
+`@public` in its JSDoc — ImportLint flags every import that breaks the
+rule. It's a small, fast Rust CLI, so it runs without a TypeScript
+compiler or ESLint, and stays fast on large codebases.
 
 **Already migrating from `eslint-plugin-import-access`?** Jump straight to
 [Migration](#migration-from-eslint-plugin-import-access) — this README
@@ -21,35 +22,39 @@ but the moment you export it, it's visible — and importable — from
 anywhere in the project. There's no built-in way to say "this is shared
 between these five files, but not the rest of the codebase."
 
-That gap pushes real projects toward workarounds nobody's actually
-enforcing: oversized files (to keep more logic behind the one boundary that
-does exist), `_internal`-style naming conventions a code review has to
-catch by eye, or index files that gesture at a public surface without
-anyone checking that the rest of the module respects it. None of these get
-more reliable as a project grows — they get less.
-
-ImportLint adds a directory-level layer on top of the file: tag an export
-`@package` and it's importable only from its own directory and directories
-nested inside it (or a boundary you name explicitly — see
-[`packageDirectory`](#config-file) below); tag it `@private` and it's not
-importable from anywhere outside its own file, not even the rest of its
-directory. The check needs neither a TypeScript program nor ESLint and runs
-in milliseconds, so nothing stops you from enforcing it on every keystroke
-or in CI.
+ImportLint adds that directory-level layer on top of the file: each
+directory (or a boundary you name explicitly — see
+[`packageDirectory`](#config-file) below) is a "package" whose exports
+stay inside it unless tagged `@public`; `@private` narrows an export
+further, to its own file. The check needs neither a TypeScript program
+nor ESLint and runs in milliseconds, so nothing stops you from enforcing
+it on every keystroke or in CI.
 
 ## Example
 
 ```
 src/
 ├── cart/
-│   └── total.ts     ── computeTotal(), tagged @package
+│   └── total.ts     ── computeTotal()
 └── receipt.ts        ── imports computeTotal from outside cart/
+```
+
+`.importlintrc.jsonc` — the recommended package-by-default setup
+(`import-lint init` scaffolds a fuller, commented version):
+
+```jsonc
+{
+  "rules": {
+    "package-access": {
+      "defaultImportability": "package"
+    }
+  }
+}
 ```
 
 `src/cart/total.ts`:
 
 ```ts
-/** @package */
 export function computeTotal(items: number[]): number {
   return items.reduce((a, b) => a + b, 0);
 }
@@ -63,8 +68,6 @@ import { computeTotal } from "./cart/total";
 console.log(computeTotal([1, 2, 3]));
 ```
 
-No config file needed — this works with ImportLint's defaults:
-
 ```
 $ import-lint .
 src/receipt.ts
@@ -73,9 +76,14 @@ src/receipt.ts
 ✖ 1 problem (1 error, 0 warnings)
 ```
 
-The fix is one line: tag `computeTotal` `@public` instead, if it's meant to
-be used from anywhere — or leave it `@package` and move `receipt.ts` inside
-`cart/`, if it isn't. Either way, the next run is clean, with no output.
+The fix is one line: tag `computeTotal` with `/** @public */`, if it's meant
+to be used from anywhere — or move `receipt.ts` inside `cart/`, if it isn't.
+Either way, the next run is clean, with no output.
+
+Prefer opting in gradually instead? With no config file at all, nothing is
+restricted until you tag an export `@package` — the same model as
+`eslint-plugin-import-access`, and the easiest way to adopt ImportLint on an
+existing codebase.
 
 For the full mental model, see the
 [Concepts guide](https://github.com/uhyo/import-lint/blob/master/docs/guides/concepts.md);
@@ -134,19 +142,21 @@ import-lint src lib
 import-lint --format json
 ```
 
-With no config file, ImportLint lints `.` with the `package-access` rule at `error` severity
-and every option at its default (identical to `eslint-plugin-import-access`'s
-defaults — see [Migration](#migration-from-eslint-plugin-import-access)).
-`import-lint init` scaffolds a fully commented starting point instead of hand-writing
-one, from one of three presets — see [Config file](#config-file) below, and the
+`import-lint init` scaffolds a fully commented `.importlintrc.jsonc` from one
+of three presets; its default, `standard`, is the recommended package-by-default
+setup shown above. With no config file, ImportLint lints `.` with the
+`package-access` rule at `error` severity and every option at its built-in
+default — identical to `eslint-plugin-import-access`'s defaults, where exports
+stay public until tagged `@package` (see
+[Migration](#migration-from-eslint-plugin-import-access)). See
+[Config file](#config-file) below, and the
 [Adoption guide](https://github.com/uhyo/import-lint/blob/master/docs/guides/adoption.md)
-for which one fits your project and how to roll it out.
+for which preset fits your project and how to roll it out.
 
 ### Guides
 
 [`docs/guides/`](https://github.com/uhyo/import-lint/tree/master/docs/guides)
-has three short guides for the second sitting — this README stays a
-complete reference on its own:
+has three short guides:
 
 - [**Concepts**](https://github.com/uhyo/import-lint/blob/master/docs/guides/concepts.md) —
   the mental model: importability, package directories, both loopholes,
@@ -190,9 +200,10 @@ config file — see below.
 
 Run `import-lint init` to scaffold one instead of hand-writing it: interactively
 (a numbered picker, if run in a terminal) or non-interactively via
-`--preset <name>`. Three presets are available — `standard` (the `*.package`
-naming convention: directories named `foo.package` are encapsulation boundaries;
-recommended for new projects), `gradual` (annotation-driven: exports stay public
+`--preset <name>`. Three presets are available — `standard` (the recommended
+default: exports are package-private unless tagged `@public`, with directories
+named `foo.package` as the encapsulation boundaries), `gradual` (the opposite,
+annotation-driven mode: exports stay public
 until tagged `@package`/`@private`; for adopting on an existing codebase), and
 `monorepo` (boundaries at `packages/*`: no relative reach-ins across workspace
 packages). A preset only picks starting values for the `package-access` options below — the
@@ -208,10 +219,10 @@ directory containing the config file becomes the project root**: `include`,
 found, ImportLint uses the defaults below with the project root set to the current
 directory.
 
-The options below are the levers behind the concepts explained in the
-[Concepts guide](https://github.com/uhyo/import-lint/blob/master/docs/guides/concepts.md) —
-this is the quick reference; that guide is the "why", with a worked example per
-option.
+Below is the quick reference for every option (shown with its built-in
+default); the
+[Concepts guide](https://github.com/uhyo/import-lint/blob/master/docs/guides/concepts.md)
+explains each with a worked example.
 
 ```jsonc
 // .importlintrc.jsonc
@@ -243,7 +254,9 @@ option.
       "filenameLoophole": false,
 
       // Access level assumed for an export with no recognized JSDoc access tag.
-      // "public" | "package" | "private"
+      // "public" | "package" | "private". The built-in default is "public"
+      // (matching eslint-plugin-import-access); "package" is the recommended
+      // setting, and what the `standard` preset uses.
       "defaultImportability": "public",
 
       // How a bare specifier matching the importer's own package name is

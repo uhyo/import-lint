@@ -2,9 +2,10 @@
 
 Documents ImportLint v0.1.3.
 
-ImportLint's `package-access` rule reads JSDoc access tags (`@public`/`@package`/
-`@private`) on your exports and flags imports that cross a directory-level
-encapsulation boundary — see [`concepts.md`](./concepts.md) for the full
+ImportLint's `package-access` rule enforces directory-level encapsulation:
+in the recommended setup, exports stay inside their "package" unless tagged
+`@public` — or, in the opt-in mode, stay public until tagged
+`@package`/`@private` — see [`concepts.md`](./concepts.md) for the full
 mental model, or [`tutorial.md`](./tutorial.md) for a hands-on walkthrough of
 one boundary end to end. This guide is about the next question: which of the
 three built-in `import-lint init` presets fits your project, and how do you
@@ -21,7 +22,7 @@ binary.
 
 | Preset | What's a boundary | What's restricted by default | Best for |
 |---|---|---|---|
-| `standard` | Any directory named `foo.package` (`packageDirectory: ["**/*.package"]`) | Everything inside a boundary — tag `@public` to expose an export outside it (`defaultImportability: "package"`) | New projects: the boundary is visible in the file tree itself, and never needs updating as the project grows. |
+| `standard` | Any directory named `foo.package` (`packageDirectory: ["**/*.package"]`) | Everything inside a boundary — tag `@public` to expose an export outside it (`defaultImportability: "package"`) | The recommended default: the boundary is visible in the file tree itself, and never needs updating as the project grows. |
 | `gradual` | Every plain directory (no `packageDirectory` set) | Nothing — every export is public until you tag it (`defaultImportability: "public"`, every other option at its default) | Adopting on an existing codebase without breaking the build on day one. |
 | `monorepo` | Each `packages/*` workspace package (`packageDirectory: ["packages/*"]`) | Everything inside a package (`defaultImportability: "package"`) — but only for *relative* reach-ins; a sibling package imported *by name* is exempt | Monorepos where the workspace package, not the directory, is the real unit of ownership. |
 
@@ -175,9 +176,9 @@ leaky-looking parts of the tree first. There's no "finish line" enforced by
 the tool; `gradual`'s point is that partial coverage is a fully valid, fully
 enforced state; you're never running with anything less than everything
 you've tagged so far. Once most of the codebase is tagged, consider
-switching `defaultImportability` to `"package"` (effectively converting to
-the `standard` preset's default-restrictive posture) so newly added files
-are covered automatically instead of needing an explicit tag.
+switching `defaultImportability` to `"package"` — the recommended end state,
+converting to the `standard` preset's default-restrictive posture — so newly
+added files are covered automatically instead of needing an explicit tag.
 
 ## Playbook: `monorepo`
 

@@ -3,10 +3,12 @@
 Documents ImportLint v0.1.3.
 
 ImportLint enforces directory-level encapsulation for TypeScript and
-JavaScript: it reads JSDoc access tags on your `export` statements and flags
-imports that cross a boundary they shouldn't. This guide defines the terms
-that model uses, each with a small example you can reproduce yourself. It's
-written for someone who has never used ImportLint or its ancestor,
+JavaScript: a directory is a "package", and in the recommended setup its
+exports are importable only from inside it until tagged `@public` in their
+JSDoc — ImportLint flags every import that crosses a boundary it shouldn't.
+This guide defines the terms that model uses, each with a small example you
+can reproduce yourself. It's written for someone who has never used
+ImportLint or its ancestor,
 [`eslint-plugin-import-access`](https://github.com/uhyo/eslint-plugin-import-access) —
 if you already know that plugin, every option here maps 1:1 by name (see the
 root README's [Migration](../../README.md#migration-from-eslint-plugin-import-access)
@@ -26,26 +28,30 @@ in the sentence right above the code block).
 A **package**, in ImportLint's vocabulary, has nothing to do with an npm
 package — it's the unit of encapsulation the tool checks. By default, a
 file's package is its own containing directory *together with every
-directory nested inside it, at any depth*: an export tagged for
-package-only visibility is importable from its own directory or from any
-subdirectory of that directory, but not from a parent directory or a
-sibling directory. The relationship only runs one way — inward and
-downward, never outward and up.
+directory nested inside it, at any depth*: a package-scoped export is
+importable from its own directory or from any subdirectory of that
+directory, but not from a parent directory or a sibling directory. The
+relationship only runs one way — inward and downward, never outward and
+up.
 
 ```
 src/
 ├── cart/
-│   ├── total.ts        ── exports computeTotal, tagged @package
+│   ├── total.ts        ── exports computeTotal (untagged)
 │   ├── checkout.ts     ── same directory: can import computeTotal
 │   └── promo/
 │       └── discount.ts  ── nested subdirectory: can ALSO import computeTotal
 └── receipt.ts            ── parent directory: cannot
 ```
 
+Config — the recommended package-by-default setup:
+`"defaultImportability": "package"`. With it, no JSDoc tag is needed for an
+export to be package-scoped (an explicit `/** @package */` tag means the same
+thing in any configuration — see [Importability](#importability) below).
+
 `src/cart/total.ts`:
 
 ```ts
-/** @package */
 export function computeTotal(items: number[]): number {
   return items.reduce((a, b) => a + b, 0);
 }
@@ -81,10 +87,12 @@ src/receipt.ts
 ✖ 1 problem (1 error, 0 warnings)
 ```
 
-The asymmetry matters: if `discount.ts` (nested inside `cart/`) exported
-something `@package`, `checkout.ts` (in `cart/` itself, an *ancestor* of
-`discount.ts`'s directory) could **not** import it — only `promo/`'s own
-directory or something nested even deeper inside `promo/` could. Visibility
+The asymmetry matters — and `discount.ts`'s own `discountedTotal` export
+shows it: `checkout.ts` (in `cart/` itself, an *ancestor* of `discount.ts`'s
+directory) can **not** import it — only `promo/`'s own directory or
+something nested even deeper inside `promo/` can (verified: adding that
+import to `checkout.ts` gets
+`Cannot import a package-private export 'discountedTotal'`). Visibility
 flows from an ancestor directory down into its descendants, never from a
 descendant back up or sideways to a sibling.
 
@@ -109,9 +117,9 @@ levels, declared with a JSDoc tag directly above the `export`:
 as an alternate spelling of the same three tags.)
 
 An export with **no** recognized tag falls back to the `defaultImportability`
-option (`"public"` | `"package"` | `"private"`, default `"public"`) — this is
-the single option that decides whether an *unannotated* codebase starts wide
-open or fully closed.
+option (`"public"` | `"package"` | `"private"`, built-in default `"public"`) —
+this is the single option that decides whether an *unannotated* codebase
+starts wide open or fully closed.
 
 `src/cart/total.ts`:
 
@@ -139,7 +147,7 @@ import { computeTotal, internalRound, untaggedHelper } from "./cart/total";
 console.log(computeTotal([1, 2, 3]), internalRound(1.4), untaggedHelper(2));
 ```
 
-With `defaultImportability` at its default (`"public"`), this gets exactly
+With `defaultImportability` at its built-in default (`"public"`), this gets exactly
 one diagnostic — `computeTotal` (public) and `untaggedHelper` (defaults to
 public) are both fine, `internalRound` isn't:
 
@@ -163,8 +171,10 @@ src/receipt.ts
 ```
 
 `defaultImportability: "package"` is what makes tagging *optional-by-default,
-restrictive-by-default* — the `standard` preset in
-[`adoption.md`](./adoption.md) uses it.
+restrictive-by-default* — the recommended setting, and what the `standard`
+preset in [`adoption.md`](./adoption.md) uses. The built-in default is
+`"public"`, matching `eslint-plugin-import-access` — the gradual, opt-in mode
+for adopting on an existing codebase.
 
 ## Package directory
 
