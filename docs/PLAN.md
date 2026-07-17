@@ -1,144 +1,118 @@
-# ImportLint — `init` Scaffolding Plan (M9)
+# ImportLint — Newcomer Documentation Plan (M10)
 
-Everything planned so far has shipped: the core linter (M0–M7), npm distribution
-(N1–N3), and the LSP server + VS Code extension (M8/L1–L4). Earlier plans are
-archived at [`docs/PLAN-v1.md`](./PLAN-v1.md), [`docs/PLAN-npm.md`](./PLAN-npm.md),
-and [`docs/PLAN-lsp.md`](./PLAN-lsp.md).
+All shipped so far: core linter (M0–M7, [`PLAN-v1.md`](./PLAN-v1.md)), npm
+distribution (N1–N3, [`PLAN-npm.md`](./PLAN-npm.md)), LSP + VS Code extension
+(M8, [`PLAN-lsp.md`](./PLAN-lsp.md)), and the `init` scaffolding subcommand
+(M9, [`PLAN-init.md`](./PLAN-init.md)).
 
-Today, adopting ImportLint means hand-writing `.importlintrc.jsonc` — in practice,
-copying the README's example and guessing which options fit your project. This plan
-adds a scaffolding subcommand:
+**Problem (from the 2026-07-17 docs audit):** the README is reference
+documentation for people who already use `eslint-plugin-import-access`. It
+opens by *comparing* ("same functionality as eslint-plugin-import-access,
+without tsc/ESLint") rather than *teaching*. The `@package` concept, the word
+"package" itself, "importability", the loopholes, and one-hop re-export
+semantics are all used before (or without ever) being defined. There is no
+motivation section, no concrete violation example, no tutorial, and the three
+`init` presets are named but not choosable by someone who doesn't already know
+the convention behind each.
 
-**Goal:** `import-lint init` creates a ready-to-run, fully commented
-`.importlintrc.jsonc` in the current directory, offering a small set of **presets**
-chosen either interactively (TTY) or non-interactively via a `--preset` flag, so
-that `npx @import-lint/cli init && npx @import-lint/cli` is a working first-run
-experience.
+**Goal:** a developer who has never heard of `eslint-plugin-import-access` (or
+JSDoc access tags at all) can, from the README alone, understand *why* the tool
+exists, see a violation and its fix in 30 seconds of reading, get running with
+`import-lint init`, and find their way to deeper guides. Migrator content
+stays, but stops being the organizing principle.
+
+**Scope (user-locked):** newcomer-first README overhaul + a small in-repo
+guide set under `docs/guides/`. Explicitly **no docs-site infrastructure**
+(no VitePress/mkdocs/GitHub Pages).
 
 ---
 
-## 1. Product decisions (locked)
+## 1. Decisions (locked)
 
 | # | Decision | Rationale |
 |---|---|---|
-| D-I1 | `init` is a subcommand of the existing binary — **`import-lint init [--preset <name>] [--force]`** — and writes `.importlintrc.jsonc` into the **current directory** (which thereby becomes the project root). | Same single-binary distribution story as `lsp` (PLAN-lsp.md E1): no new crate, no new packages, works identically via crates.io, npm shim, and GH-Release binaries. Writing to cwd matches config-discovery semantics exactly (the config file's directory *is* the project root, PLAN-v1.md D7) — no `--dir` flag to reason about. |
-| D-I2 | **Three presets: `standard`, `gradual`, `monorepo`** (see §2). A preset is a *scaffold-time template*, not a runtime mode: the generated file is plain config, fully editable, and contains no reference back to the preset (no `"extends"`). | The `jsdoc` rule has two axes that actually distinguish real-world setups (`defaultImportability`, `packageDirectory`); three presets cover them without sprawl. Scaffold-time-only keeps `crates/core` completely untouched — the config model, loader, and LSP know nothing about presets. *(Revised in review: default-package is the flagship for new projects, but bare default-package with every directory as a boundary is too strict to recommend — `standard` adopts the `*.package` naming convention recommended in the reference plugin's v3.1.0 `packageDirectory` writeup, see §2.)* |
-| D-I3 | Always write **`.importlintrc.jsonc`**, never `.json`, and every preset's output is **fully commented** — each option annotated the way the README example is. | `.jsonc` wins discovery over `.json` (D7), and comments are the product: the generated file doubles as inline documentation, which is what makes a template better than `{}`. |
-| D-I4 | Templates are **static string constants** in `crates/cli/src/init.rs`, one per preset — no serde serialization, no templating engine. Guard: a unit test parses every template through `LintConfig::load`. | Comments can't come out of `serde_json`, so string constants are forced anyway; the win is that `deny_unknown_fields` turns any future config-schema drift into a red test instead of a scaffold that fails at first lint. |
-| D-I5 | Interactive selection runs when `--preset` is absent **and stdin and stderr are both TTYs**: a hand-rolled **numbered menu** (prompt on stderr, one line read from stdin; empty input = `standard`; invalid input re-prompts; EOF is an error). Non-TTY without `--preset` exits `2` with a "pass `--preset <name>`" message. | No new dependencies: arrow-key pickers (`dialoguer`, `inquire`) need raw terminal mode, which is untestable in CI and overkill for three options. A numbered menu is a pure function over a reader/writer, unit-testable with a `Cursor`. Erroring (rather than silently defaulting) in non-TTY contexts matches the config loader's explicit-over-implicit philosophy; CI/scripts have `--preset`. |
-| D-I6 | Overwrite safety: if `.importlintrc.jsonc` **or** `.importlintrc.json` already exists in cwd, refuse with exit `2` unless `--force`. `--force` writes `.jsonc` and, when a `.json` remains beside it, prints a note that the `.jsonc` now shadows it. If a config exists only in an *ancestor* directory, proceed, but print a note that the new file takes over for this subtree. | Never destroy a config silently. The ancestor case is legitimate (initializing a nested project) but surprising enough to call out, since the new file changes the project root for everything under cwd. |
-| D-I7 | All `init` output (prompt, notes, success message) goes to **stderr**; stdout stays clean. Exit codes follow the CLI contract: `0` file created, `2` everything else (existing config without `--force`, non-TTY without `--preset`, I/O failure). | The lint invocation reserves stdout for diagnostics; `init` printing human chatter to stderr keeps the binary's stream contract uniform and `init`'s output pipe-safe. |
-| D-I8 | No filesystem sniffing in v1: `init` does not detect `tsconfig.json`, package managers, or workspace layouts. The template carries the commented-out `"tsconfig"` line; the existing `<project root>/tsconfig.json` default already covers the common case at lint time. | Keep `init` dumb and predictable. Detection (e.g. pre-filling `packageDirectory` from package.json `workspaces`) is a plausible v2, listed in §7 — it should be added deliberately, not smuggled into v1. |
+| D-D1 | **README leads with teaching, not comparison.** New section order: pitch (one paragraph, self-contained) → "Why?" (the file-is-the-only-encapsulation-unit problem, adapted from the reference plugin's framing) → a concrete example (real files, a `@package` export, the violating import, the *actual* error output) → Getting started (`init`) → reference sections (flags/config/output/CI/watch/editors) → Migration → Performance/Roadmap. A "already migrating from eslint-plugin-import-access?" jump-link sits right under the pitch so migrators lose nothing. | The audit's core finding: every reader currently pays the migrator tax. Migrators are served by one link; newcomers can't be served by any link if the concept is never taught. |
+| D-D2 | **Three guides in `docs/guides/`**: `concepts.md` (the mental model: packages, importability, boundaries, index/filename loopholes, `packageDirectory`, one-hop re-export semantics — the glossary lives here), `tutorial.md` (hands-on: scaffold with the `standard` preset, create a `foo.package/` boundary, hit a real error, fix it three ways — `@public`, index re-export, move the importer inside), `adoption.md` (preset comparison table + playbooks: greenfield/standard, retrofit/gradual with a phased-annotation strategy, monorepo). | One doc per question a newcomer actually asks: "how does this think?", "show me", "which preset and how do I roll it out?". Three files, flat, no infra (scope lock). `docs/guides/` keeps user docs visibly separate from internal `PLAN*/RELEASING/research`. |
+| D-D3 | **Every command, code sample, and error message shown in any doc must be produced by actually running the workspace binary** and pasted from real output (paths/timing scrubbed). No hypothetical output. | The docs teach by example; a fabricated error string that drifts from `diagnostics.rs` poisons trust. This is the doc-equivalent of M9's template round-trip test — enforced editorially (§3 checklist) rather than in CI. |
+| D-D4 | **Diagrams are ASCII file-trees and annotated code blocks only** — no images, no mermaid. | The domain is directories and imports; a file-tree with arrows in a code fence renders identically on GitHub, crates.io, npmjs.com, and in terminals. The reference plugin's PNGs are its weakest maintenance point. |
+| D-D5 | **README stays a complete standalone reference** (target ≤ ~450 lines): guides deepen, they don't replace. Nothing that exists only in a guide may be *required* to use the tool correctly; config-option one-liners stay in the README and link to `concepts.md` for the "why". | Most readers never leave the README; npm/crates render it as the package page. Guides are for the second sitting. |
+| D-D6 | `npm/import-lint/README.md` and `editors/vscode/README.md` open with the same one-paragraph *teaching* pitch as the root README (not the "port of eslint-plugin-import-access" comparison), then link to the root README. GitHub repo description + npm `description` field get the same treatment (repo description is a manual user step; npm description changes in `npm/import-lint/package.json` ride the next publish). | The audit found the comparison-as-identity problem replicated in every entry point. One pitch, written once, reused verbatim. |
+| D-D7 | **Migration section is kept intact** (content unchanged apart from moving later and gaining the jump-link target). | It's good content for its audience; the problem was placement, not existence. |
 
-## 2. Presets
+## 2. Content requirements (what "done" means per doc)
 
-| Preset | Distinguishing config | Who it's for |
+- **README pitch:** must be understandable with zero prior context — defines
+  the idea (mark an export `@package` to keep it inside its directory-package)
+  in the first two sentences; mentions speed and the no-tsc/no-ESLint design as
+  *properties*, not as the identity.
+- **README "Why?":** the encapsulation-stops-at-the-file problem, ~3 short
+  paragraphs max, ending with "ImportLint adds a directory-level layer".
+- **README example:** one file-tree + two code snippets + the real `pretty`
+  diagnostic, then the one-line fix. Must fit on one screen.
+- **concepts.md:** defines, in order, with an example each: *package*,
+  *importability* (`@public`/`@package`/`@private` + `defaultImportability`),
+  *package directory* (default parent-dir behavior vs `packageDirectory`
+  globs, incl. the `*.package` convention), *index loophole* (incl. the
+  promotion-cascades-one-level-at-a-time behavior), *filename loophole*,
+  *re-exports and one-hop semantics* (a bare re-export resets to
+  `defaultImportability`; the re-export's own JSDoc governs), what counts as
+  *external* (never checked) vs *internal*. Semantics must match the shipped
+  rule engine — derive examples from `crates/cli/tests/` fixtures and verify
+  per D-D3.
+- **tutorial.md:** every step copy-pasteable in an empty directory; total time
+  ~10 minutes; ends with the reader having seen error → three distinct fixes →
+  green run, plus a "where next" footer (concepts, adoption).
+- **adoption.md:** a comparison table a newcomer can choose from (what's a
+  boundary, what's restricted by default, best for), then one playbook per
+  preset; the `gradual` playbook must give an actual phasing strategy
+  (annotate one directory, `--format` in CI, ratchet).
+
+## 3. Verification checklist (release-gate for each milestone)
+
+1. Every shell block ran verbatim against the current workspace binary; every
+   diagnostic shown is pasted real output.
+2. Every config snippet parses (`import-lint --config <snippet>` on a temp
+   copy, or via an `init`-generated base).
+3. Every claimed behavior (loophole promotion, one-hop reset, external
+   exemption) is demonstrated by a fixture that was actually run.
+4. Terms are defined at first use in each doc (docs are entered independently
+   via search).
+5. All cross-links resolve on GitHub (relative paths from each file's own
+   location; remember npm/crates render the README *outside* the repo — links
+   from the root README to `docs/guides/*` must be absolute GitHub URLs, same
+   as the existing Migration-section convention if one exists, else
+   `https://github.com/uhyo/import-lint/blob/master/...`).
+6. `cargo test --workspace` still green (docs-only, but the RELEASING.md R-I4
+   prose-sync rule now extends to: README config example ↔ `gradual` template
+   ↔ any config shown in guides).
+
+## 4. Risks
+
+| # | Risk | Mitigation |
 |---|---|---|
-| `standard` | `"defaultImportability": "package"` + `"packageDirectory": ["**/*.package"]` | **New projects (recommended, the picker default): the `*.package` naming convention** — a *meta-configuration* (a naming rule, not a directory list, so the config never needs updating as the project grows). A directory named `foo.package/` is a hard encapsulation boundary: everything inside it, at any depth, imports freely from anything else inside; nothing outside can import from it unless the export is tagged `@public` (or surfaced through the boundary's `index.ts` — the index loophole, on by default, promotes `index.ts` exports to the parent's package, and since a bare re-export resets to `defaultImportability`, exposure cascades deliberately one level at a time). Boundaries are visible in the file tree itself. *Outside* any `*.package` directory, the package-directory fallback is the file's own parent, so default-package still means per-directory scoping there, with the same `index.ts` cascade as the escape valve — declare a `*.package` boundary above when a subtree should share freely. |
-| `gradual` | All defaults (`defaultImportability: "public"`, `indexLoophole: true`) | Incremental adoption on an existing codebase: nothing is restricted until you tag exports `@package`/`@private`. The generated file is essentially the README example. |
-| `monorepo` | `"defaultImportability": "package"` + `"packageDirectory": ["packages/*"]` (with a comment saying to adjust the globs, e.g. adding `"apps/*"`) | Workspace repos: boundaries sit at the workspace-package level — deep relative reach-ins across sibling packages (`../../other-pkg/src/…`) become errors unless the export is `@public`, while name-based imports of sibling workspace packages resolve through `node_modules` and stay exempt as external (and `treatSelfReferenceAs` keeps its `"external"` default). Inside one workspace package, imports are unrestricted. |
+| R-D1 | Subtle-semantics errors in `concepts.md` (one-hop, loophole cascade) | D-D3 run-everything rule; examples derived from conformance fixtures; final review by the project lead against the rule-engine source. |
+| R-D2 | README bloat (teaching added, nothing removed) | D-D5 line budget; the deep option-reasoning moves to `concepts.md`, terse one-liners remain. |
+| R-D3 | Relative links broken on npm/crates package pages | §3.5 absolute-URL rule for README→guides links. |
+| R-D4 | Guides drift as options evolve | Guides carry a "documents behavior as of vX.Y.Z" line; RELEASING.md checklist item extended (§3.6). |
 
-Each template is a complete, self-describing config: `include`, `exclude`, the
-commented `tsconfig` line, and the full `rules.jsdoc` block with every option
-present (commented out when it's at its default), adapted from the README's config
-example. The preset determines which lines are live and what values they hold —
-nothing else differs. The `standard` template's comments also teach the workflow
-(name a boundary `foo.package/`; publish via `index.ts` re-export or `@public`)
-and show the documented alternative conventions as commented-out one-liners so
-switching is a single edit: the inverse naming rule (`["**", "!**/*.internal"]` —
-every directory is a boundary *except* ones opting out by name), the fixed-location
-style (`["src/packages/*"]`), and `"filenameLoophole": true` for the companion-file
-pattern (`sub.ts` next to `sub/`).
+## 5. Milestones
 
-## 3. CLI surface
+**D1 — guides:** `docs/guides/{concepts,tutorial,adoption}.md` per §2, all
+examples verified per §3. Exit: a reviewer can execute `tutorial.md` top to
+bottom in an empty temp dir and every output matches.
 
-```
-import-lint init                    # interactive picker (TTY); exit 2 if not a TTY
-import-lint init --preset gradual   # non-interactive, for scripts/CI
-import-lint init --force            # overwrite an existing config in cwd
-```
+**D2 — README overhaul + peripheral pitches:** root README restructured per
+D-D1/D-D5 with links into the guides; npm + vscode READMEs and npm package
+`description` per D-D6; RELEASING.md checklist extension (§3.6). Exit: the
+audit's §C gap list re-checked — each of the 8 gaps has a concrete answer;
+README ≤ ~450 lines; migration content intact behind the jump-link.
 
-- `--preset` is a clap `ValueEnum` — invalid names get clap's native error and the
-  candidates list for free, and the presets self-document in `init --help`.
-- Interactive transcript sketch (stderr):
+## 6. Out of scope
 
-  ```
-  Choose a preset:
-    1) standard  — *.package naming convention: directories named foo.package
-                   are encapsulation boundaries; exports are package-scoped
-                   unless @public (recommended for new projects)
-    2) gradual   — annotation-driven: exports stay public until tagged
-                   @package/@private (for adopting on an existing codebase)
-    3) monorepo  — boundaries at packages/*: no relative reach-ins across
-                   workspace packages
-  Preset [1]:
-  ```
-
-- Known (accepted) behavior change: a lint target literally named `init` now needs
-  `import-lint ./init`, same as the existing `inspect`/`graph`/`lsp` names.
-
-## 4. Implementation shape (`crates/cli/src/init.rs`)
-
-- `Preset` enum (`clap::ValueEnum` + a description used by both `--help` and the
-  menu), `fn template(Preset) -> &'static str` over three `const` strings.
-- `run_init(cwd, preset: Option<Preset>, force: bool) -> Result<(), InitError>` —
-  the guards from D-I6, the write, the notes. `main.rs` gains a
-  `Command::Init { preset, force }` arm that maps `InitError` to exit `2`,
-  mirroring the other subcommands.
-- `choose_preset(input: impl BufRead, out: impl Write) -> io::Result<Preset>` —
-  the menu as a pure function; the TTY gate lives in the caller only. This seam is
-  what makes the interactive path unit-testable (and swappable for a fancier
-  picker later, see risk R-I3).
-- Zero changes to `crates/core`.
-
-## 5. Testing strategy
-
-- **Template round-trip (unit):** every preset's template must parse via
-  `LintConfig::load` — with `deny_unknown_fields`, any config-schema change that
-  invalidates a template is a red test, not a broken scaffold (D-I4). Also assert
-  the distinguishing options landed (e.g. `standard` really has
-  `defaultImportability: Package` and `packageDirectory: ["**/*.package"]`).
-- **Menu (unit):** `choose_preset` over `Cursor` inputs — picks by number, empty
-  line defaults to `standard`, garbage re-prompts then succeeds, EOF errors.
-- **CLI integration (`crates/cli/tests/init.rs`):** for each preset,
-  `import-lint init --preset X` in a temp dir creates the file **and a follow-up
-  lint run in that fixture succeeds using it** (the real exit criterion); refusal
-  + exit `2` when `.importlintrc.jsonc` or `.json` exists; `--force` overwrites;
-  non-TTY without `--preset` exits `2` with the guidance message. The interactive
-  path is deliberately not e2e-tested (piped stdin never passes the TTY gate) —
-  that's what the `choose_preset` seam is for.
-- **Docs:** README Quick start gains `import-lint init` as step 1; the config
-  section mentions the presets; npm README gets the same one-liner.
-
-## 6. Risks and mitigations
-
-| # | Risk | Impact | Mitigation |
-|---|---|---|---|
-| R-I1 | Template drift as the config schema evolves | `init` scaffolds a config that fails to load | Round-trip unit test per preset (D-I4); `deny_unknown_fields` makes drift loud. |
-| R-I2 | Preset sprawl / naming bikeshed | Maintenance burden, decision fatigue for users | Presets are curated starting points, not a plugin surface: adding one costs a const + a test row, and there is deliberately no runtime `"extends"` to keep compatible forever. |
-| R-I3 | Numbered menu feels dated next to arrow-key CLIs | UX polish complaints | Fine for three options; if demand materializes, swap the implementation behind `choose_preset` for `dialoguer` — one function, no architectural change. |
-| R-I4 | README example and the `gradual` template drift apart | Docs inconsistency (not breakage) | Editorial: they're adapted from the same text; the round-trip test guards correctness, and a release-checklist line in RELEASING.md covers the prose. |
-
-## 7. Milestones
-
-**I1 — `init --preset` end-to-end:** subcommand + presets + templates + the D-I6
-guards + unit/integration tests per §5 + README updates. Exit: in a fresh temp
-project, `import-lint init --preset monorepo && import-lint` runs green using the
-generated config on all three CI OSes.
-
-**I2 — interactive picker:** TTY gate + numbered menu + `choose_preset` unit
-tests + docs polish. Exit: manual TTY smoke — bare `import-lint init` in a fresh
-project walks the prompt and scaffolds the `standard` preset.
-
-## 8. Explicitly out of scope
-
-- Runtime preset semantics (`"extends": "standard"` resolved at lint time) —
-  presets exist only at scaffold time (D-I2).
-- Project detection: reading package.json `workspaces` to pre-fill
-  `packageDirectory`, tsconfig discovery, framework sniffing (D-I8) — the natural
-  v2 if `init` gets traction.
-- Prompting beyond the single preset question (include dirs, severity, rule
-  options) — the generated file's comments do that job better than a wizard.
-- A VS Code "ImportLint: Initialize" command wrapping `init` — editor work,
-  separate decision.
-- Writing `.importlintrc.json` (comment-free) output — `.jsonc` only (D-I3).
+- Docs website / GitHub Pages (user-locked).
+- Screenshots, GIFs, images of any kind (D-D4).
+- Translating docs (the reference plugin has Japanese docs; nothing here yet).
+- A `docs/` restructure of internal files (`PLAN*`, `RELEASING`, `benchmarks`
+  stay where they are).
+- CI enforcement of doc examples (editorial checklist only, v2 idea: a
+  doc-snippet extraction test).

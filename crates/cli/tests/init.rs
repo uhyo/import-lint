@@ -1,9 +1,9 @@
-//! `import-lint init` end-to-end tests (M9, `docs/PLAN.md` §5, milestone I1):
+//! `import-lint init` end-to-end tests (M9, `docs/PLAN-init.md` §5, milestone I1):
 //! spawn the real binary (`env!("CARGO_BIN_EXE_import-lint")`) against a fresh
 //! `TempDir` fixture per test, mirroring `tests/cli.rs`'s pattern. The interactive
 //! (TTY) picker is deliberately not exercised here — piped stdin/stderr never
 //! pass the TTY gate, so that path is covered by `crates/cli/src/init.rs`'s
-//! `choose_preset` unit tests instead (PLAN.md §5).
+//! `choose_preset` unit tests instead (PLAN-init.md §5).
 
 use std::fs;
 use std::path::Path;
@@ -41,7 +41,7 @@ fn run_in(dir: &Path, args: &[&str]) -> Output {
 /// `import-lint init --preset <preset>` writes `.importlintrc.jsonc` and prints
 /// nothing to stdout (D-I7); a follow-up `import-lint` run against a trivial
 /// fixture then exits clean using the generated config — the real exit criterion
-/// (PLAN.md milestone I1).
+/// (PLAN-init.md milestone I1).
 #[test]
 fn each_preset_scaffolds_a_config_that_lints_clean() {
     for preset in ["standard", "gradual", "monorepo"] {

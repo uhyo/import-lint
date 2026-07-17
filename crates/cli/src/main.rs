@@ -104,7 +104,7 @@ enum Command {
     /// Run the LSP server (stdio).
     Lsp,
     /// Scaffold a `.importlintrc.jsonc` into the current directory, which
-    /// thereby becomes the project root (M9, `docs/PLAN.md`).
+    /// thereby becomes the project root (M9, `docs/PLAN-init.md`).
     Init {
         /// Preset to scaffold. Omit for an interactive picker (requires a TTY).
         #[arg(long, value_enum)]
@@ -289,7 +289,7 @@ fn lsp_command() -> ExitCode {
     }
 }
 
-/// The `init` subcommand (M9, `docs/PLAN.md` D-I1): scaffold a
+/// The `init` subcommand (M9, `docs/PLAN-init.md` D-I1): scaffold a
 /// `.importlintrc.jsonc` into the current directory. The TTY gate lives here
 /// (D-I5): interactive preset selection only happens when `--preset` is absent
 /// and both stdin and stderr are TTYs; otherwise a missing `--preset` is a usage

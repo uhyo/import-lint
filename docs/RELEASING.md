@@ -68,7 +68,7 @@ For every release after v0.1.0:
 2. Update `README.md`'s Roadmap/changelog if applicable.
 3. If the config file shape changed, check `README.md`'s `## Config file`
    example against `crates/cli/src/init.rs`'s `gradual` template — the two are
-   meant to read as the same text (docs/PLAN.md R-I4); the `init` round-trip
+   meant to read as the same text (docs/PLAN-init.md R-I4); the `init` round-trip
    unit tests catch schema drift but not prose drift between them.
 4. Follow the runbook above, substituting the new version for `v0.1.0` in the git
    tag.

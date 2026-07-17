@@ -1,4 +1,4 @@
-//! `import-lint init` (M9, `docs/PLAN.md`): scaffold a fully commented
+//! `import-lint init` (M9, `docs/PLAN-init.md`): scaffold a fully commented
 //! `.importlintrc.jsonc` into the current directory, from one of three curated
 //! presets. Scaffold-time only — `crates/core` knows nothing about presets, and
 //! the generated file carries no reference back to the one that produced it
