@@ -121,7 +121,7 @@ pub fn compute_tsconfig(
 /// `config`'s `treatSelfReferenceAs` option (spec §4.6), translated to core's
 /// `SelfReferenceMode`.
 pub fn compute_self_reference_mode(config: &LintConfig) -> SelfReferenceMode {
-    match config.rules.jsdoc.options.treat_self_reference_as {
+    match config.rules.package_access.options.treat_self_reference_as {
         SelfRefOpt::Internal => SelfReferenceMode::Internal,
         SelfRefOpt::External => SelfReferenceMode::External,
     }

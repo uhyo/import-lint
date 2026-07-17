@@ -39,7 +39,7 @@ for new projects), trimmed to the options that matter for this walkthrough.
 // outside can import an export unless it's tagged `@public`.
 {
   "rules": {
-    "jsdoc": {
+    "package-access": {
       "severity": "error",
 
       // Every export is package-scoped by default (no JSDoc tag needed).
@@ -101,7 +101,7 @@ npx @import-lint/cli .
 
 ```
 src/server.ts
-  1:10  error  Cannot import a package-private export 'issueToken'  import-access/jsdoc
+  1:10  error  Cannot import a package-private export 'issueToken'  package-access
 
 ✖ 1 problem (1 error, 0 warnings)
 ```
@@ -141,7 +141,7 @@ violation is back:
 
 ```
 src/server.ts
-  1:10  error  Cannot import a package-private export 'issueToken'  import-access/jsdoc
+  1:10  error  Cannot import a package-private export 'issueToken'  package-access
 
 ✖ 1 problem (1 error, 0 warnings)
 ```

@@ -123,7 +123,7 @@ mod tests {
             end_line: 1,
             end_column: 5,
             severity: OutputSeverity::Error,
-            rule_id: "import-access/jsdoc",
+            rule_id: "package-access",
             message: "boom".to_string(),
             message_id: "private".to_string(),
         }];

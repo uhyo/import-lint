@@ -1,5 +1,5 @@
-//! Rule options for the `jsdoc` rule (spec §4, M3), deserialized from a project
-//! manifest's camelCase options object. Mirrors the reference plugin's
+//! Rule options for the `package-access` rule (spec §4, M3), deserialized from a
+//! project manifest's camelCase options object. Mirrors the reference plugin's
 //! `RuleOptions` shape exactly — field names, defaults, and casing.
 
 use serde::Deserialize;
@@ -18,9 +18,9 @@ pub enum Importability {
 
 /// How a bare specifier matching the importer's own package name should be
 /// classified, as accepted in the `treatSelfReferenceAs` option (spec §4.6). Carried
-/// on [`JsdocRuleOptions`] so a single struct deserializes the reference options
-/// object, but consumed by the resolver (`SelfReferenceMode`) — the check phase
-/// itself ignores this field.
+/// on [`PackageAccessRuleOptions`] so a single struct deserializes the reference
+/// options object, but consumed by the resolver (`SelfReferenceMode`) — the check
+/// phase itself ignores this field.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum SelfRefOpt {
@@ -28,18 +28,18 @@ pub enum SelfRefOpt {
     External,
 }
 
-/// Options for the `jsdoc` rule (spec §4). Deserializes the exact camelCase option
-/// names the reference plugin accepts: `indexLoophole`, `filenameLoophole`,
-/// `defaultImportability`, `treatSelfReferenceAs`, `excludeSourcePatterns`,
-/// `packageDirectory`. `deny_unknown_fields` is typo protection for the config file
-/// (M5): a misspelled option name is a hard load error rather than a silently
-/// ignored no-op. This is also what makes `config::JsdocRuleConfig`'s
-/// `#[serde(flatten)]` field reject unknown keys, since serde disallows
-/// `deny_unknown_fields` on a struct that itself has a flatten field — the
-/// flattened type is where that check has to live instead.
+/// Options for the `package-access` rule (spec §4). Deserializes the exact
+/// camelCase option names the reference plugin accepts: `indexLoophole`,
+/// `filenameLoophole`, `defaultImportability`, `treatSelfReferenceAs`,
+/// `excludeSourcePatterns`, `packageDirectory`. `deny_unknown_fields` is typo
+/// protection for the config file (M5): a misspelled option name is a hard load
+/// error rather than a silently ignored no-op. This is also what makes
+/// `config::PackageAccessRuleConfig`'s `#[serde(flatten)]` field reject unknown
+/// keys, since serde disallows `deny_unknown_fields` on a struct that itself has a
+/// flatten field — the flattened type is where that check has to live instead.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields, default)]
-pub struct JsdocRuleOptions {
+pub struct PackageAccessRuleOptions {
     pub index_loophole: bool,
     pub filename_loophole: bool,
     pub default_importability: Importability,
@@ -48,7 +48,7 @@ pub struct JsdocRuleOptions {
     pub package_directory: Option<Vec<String>>,
 }
 
-impl Default for JsdocRuleOptions {
+impl Default for PackageAccessRuleOptions {
     fn default() -> Self {
         Self {
             index_loophole: true,
@@ -67,7 +67,7 @@ mod tests {
 
     #[test]
     fn default_matches_documented_defaults() {
-        let opts = JsdocRuleOptions::default();
+        let opts = PackageAccessRuleOptions::default();
         assert!(opts.index_loophole);
         assert!(!opts.filename_loophole);
         assert_eq!(opts.default_importability, Importability::Public);
@@ -86,7 +86,7 @@ mod tests {
             "excludeSourcePatterns": ["src/**"],
             "packageDirectory": ["**"],
         });
-        let opts: JsdocRuleOptions = serde_json::from_value(json).unwrap();
+        let opts: PackageAccessRuleOptions = serde_json::from_value(json).unwrap();
         assert!(!opts.index_loophole);
         assert!(opts.filename_loophole);
         assert_eq!(opts.default_importability, Importability::Package);
@@ -98,7 +98,7 @@ mod tests {
     #[test]
     fn partial_options_object_falls_back_to_defaults() {
         let json = serde_json::json!({ "defaultImportability": "private" });
-        let opts: JsdocRuleOptions = serde_json::from_value(json).unwrap();
+        let opts: PackageAccessRuleOptions = serde_json::from_value(json).unwrap();
         assert!(opts.index_loophole);
         assert_eq!(opts.default_importability, Importability::Private);
     }

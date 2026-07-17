@@ -19,7 +19,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use import_lint::rule::SelfRefOpt;
-use import_lint::{Diagnostic, JsdocRuleOptions, SelfReferenceMode, check_graph};
+use import_lint::{Diagnostic, PackageAccessRuleOptions, SelfReferenceMode, check_graph};
 use import_lint_cli::runner::RunnerOptions;
 use serde::{Deserialize, Serialize};
 use tempfile::TempDir;
@@ -173,7 +173,7 @@ fn run_option_set(name: &str) {
     let option_set = manifest["optionSets"]
         .get(name)
         .unwrap_or_else(|| panic!("no option set '{name}' in manifest.json"));
-    let options: JsdocRuleOptions = serde_json::from_value(option_set["options"].clone())
+    let options: PackageAccessRuleOptions = serde_json::from_value(option_set["options"].clone())
         .unwrap_or_else(|err| panic!("deserialize options for '{name}': {err}"));
     let expected_file = option_set["file"]
         .as_str()

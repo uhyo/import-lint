@@ -17,14 +17,14 @@ use crate::graph::ModuleGraph;
 use crate::resolve::Provenance;
 
 pub use in_package::{CompiledPackageOptions, compile_package_directory_patterns, is_in_package};
-pub use options::{Importability, JsdocRuleOptions, SelfRefOpt};
+pub use options::{Importability, PackageAccessRuleOptions, SelfRefOpt};
 
 /// Run the rule engine over every lint target in `graph`, producing every violation
 /// under `options`. `project_root` anchors `packageDirectory` and
 /// `excludeSourcePatterns` glob matching (both match against paths relative to it).
 pub fn check_graph(
     graph: &ModuleGraph,
-    options: &JsdocRuleOptions,
+    options: &PackageAccessRuleOptions,
     project_root: &Path,
 ) -> Vec<Diagnostic> {
     let targets: Vec<&Path> = graph.lint_targets.iter().map(PathBuf::as_path).collect();
@@ -41,7 +41,7 @@ pub fn check_graph(
 /// checking everything and discarding the rest.
 pub fn check_files(
     graph: &ModuleGraph,
-    options: &JsdocRuleOptions,
+    options: &PackageAccessRuleOptions,
     project_root: &Path,
     files: &[&Path],
 ) -> Vec<Diagnostic> {

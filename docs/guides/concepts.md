@@ -76,7 +76,7 @@ inside it — so it's the only one that gets a diagnostic:
 
 ```
 src/receipt.ts
-  1:10  error  Cannot import a package-private export 'computeTotal'  import-access/jsdoc
+  1:10  error  Cannot import a package-private export 'computeTotal'  package-access
 
 ✖ 1 problem (1 error, 0 warnings)
 ```
@@ -145,7 +145,7 @@ public) are both fine, `internalRound` isn't:
 
 ```
 src/receipt.ts
-  1:24  error  Cannot import a private export 'internalRound'  import-access/jsdoc
+  1:24  error  Cannot import a private export 'internalRound'  package-access
 
 ✖ 1 problem (1 error, 0 warnings)
 ```
@@ -156,8 +156,8 @@ diagnostics:
 
 ```
 src/receipt.ts
-  1:24  error  Cannot import a private export 'internalRound'  import-access/jsdoc
-  1:39  error  Cannot import a package-private export 'untaggedHelper'  import-access/jsdoc
+  1:24  error  Cannot import a private export 'internalRound'  package-access
+  1:39  error  Cannot import a package-private export 'untaggedHelper'  package-access
 
 ✖ 2 problems (2 errors, 0 warnings)
 ```
@@ -209,7 +209,7 @@ export function pay() {
 
 ```
 src/checkout/pay.ts
-  1:10  error  Cannot import a package-private export 'sign'  import-access/jsdoc
+  1:10  error  Cannot import a package-private export 'sign'  package-access
 
 ✖ 1 problem (1 error, 0 warnings)
 ```
@@ -284,7 +284,7 @@ still can't — that deep path skips the outer index and hits
 
 ```
 src/checkout.ts
-  1:10  error  Cannot import a package-private export 'secretKey'  import-access/jsdoc
+  1:10  error  Cannot import a package-private export 'secretKey'  package-access
 
 ✖ 1 problem (1 error, 0 warnings)
 ```
@@ -334,7 +334,7 @@ is a normal cross-package reach-in and fails:
 
 ```
 src/cart.ts
-  1:10  error  Cannot import a package-private export 'computeTotal'  import-access/jsdoc
+  1:10  error  Cannot import a package-private export 'computeTotal'  package-access
 
 ✖ 1 problem (1 error, 0 warnings)
 ```
@@ -389,7 +389,7 @@ fails — the bare re-export reset it to package-private:
 
 ```
 src/receipt.ts
-  1:10  error  Cannot import a package-private export 'computeTotal'  import-access/jsdoc
+  1:10  error  Cannot import a package-private export 'computeTotal'  package-access
 
 ✖ 1 problem (1 error, 0 warnings)
 ```
@@ -407,7 +407,7 @@ export { computeTotal } from "../cart/total";
 
 ```
 src/other/reexport.ts
-  1:10  error  Cannot re-export a package-private export 'computeTotal'  import-access/jsdoc
+  1:10  error  Cannot re-export a package-private export 'computeTotal'  package-access
 
 ✖ 1 problem (1 error, 0 warnings)
 ```

@@ -2,7 +2,7 @@
 
 Documents ImportLint v0.1.2.
 
-ImportLint's `jsdoc` rule reads JSDoc access tags (`@public`/`@package`/
+ImportLint's `package-access` rule reads JSDoc access tags (`@public`/`@package`/
 `@private`) on your exports and flags imports that cross a directory-level
 encapsulation boundary — see [`concepts.md`](./concepts.md) for the full
 mental model, or [`tutorial.md`](./tutorial.md) for a hands-on walkthrough of
@@ -82,7 +82,7 @@ until you say so.
 // distinguishing config: none. Every option is the built-in default.
 {
   "rules": {
-    "jsdoc": {
+    "package-access": {
       "severity": "error"
     }
   }
@@ -232,7 +232,7 @@ import-lint .
 
 ```
 packages/foo/src/index.ts
-  5:10  error  Cannot import a package-private export 'greet'  import-access/jsdoc
+  5:10  error  Cannot import a package-private export 'greet'  package-access
 
 ✖ 1 problem (1 error, 0 warnings)
 ```

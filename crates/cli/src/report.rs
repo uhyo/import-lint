@@ -121,7 +121,7 @@ pub fn diagnostics_by_file(
         .map(|file| (file.to_path_buf(), Vec::new()))
         .collect();
 
-    let severity = config.rules.jsdoc.severity;
+    let severity = config.rules.package_access.severity;
     if severity != Severity::Off {
         let output_severity = match severity {
             Severity::Error => OutputSeverity::Error,
@@ -130,7 +130,7 @@ pub fn diagnostics_by_file(
         };
         let core_diagnostics = check_files(
             module_graph,
-            &config.rules.jsdoc.options,
+            &config.rules.package_access.options,
             project_root,
             files,
         );
@@ -148,7 +148,7 @@ pub fn diagnostics_by_file(
                     end_line,
                     end_column,
                     severity: output_severity,
-                    rule_id: "import-access/jsdoc",
+                    rule_id: "package-access",
                     message: diagnostic.message(),
                     message_id: diagnostic.message_id.as_str().to_string(),
                 });

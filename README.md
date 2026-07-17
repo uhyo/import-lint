@@ -68,7 +68,7 @@ No config file needed — this works with ImportLint's defaults:
 ```
 $ import-lint .
 src/receipt.ts
-  1:10  error  Cannot import a package-private export 'computeTotal'  import-access/jsdoc
+  1:10  error  Cannot import a package-private export 'computeTotal'  package-access
 
 ✖ 1 problem (1 error, 0 warnings)
 ```
@@ -134,7 +134,7 @@ import-lint src lib
 import-lint --format json
 ```
 
-With no config file, ImportLint lints `.` with the `jsdoc` rule at `error` severity
+With no config file, ImportLint lints `.` with the `package-access` rule at `error` severity
 and every option at its default (identical to `eslint-plugin-import-access`'s
 defaults — see [Migration](#migration-from-eslint-plugin-import-access)).
 `import-lint init` scaffolds a fully commented starting point instead of hand-writing
@@ -195,7 +195,7 @@ naming convention: directories named `foo.package` are encapsulation boundaries;
 recommended for new projects), `gradual` (annotation-driven: exports stay public
 until tagged `@package`/`@private`; for adopting on an existing codebase), and
 `monorepo` (boundaries at `packages/*`: no relative reach-ins across workspace
-packages). A preset only picks starting values for the `jsdoc` options below — the
+packages). A preset only picks starting values for the `package-access` options below — the
 generated file is plain, fully editable config with no reference back to the preset.
 See the [Adoption guide](https://github.com/uhyo/import-lint/blob/master/docs/guides/adoption.md)
 for a comparison and a rollout playbook per preset.
@@ -227,7 +227,7 @@ option.
   // "tsconfig": "./tsconfig.json",
 
   "rules": {
-    "jsdoc": {
+    "package-access": {
       // "error" | "warn" | "off". An `off` rule is never checked.
       "severity": "error",
 
@@ -275,8 +275,8 @@ rule) are a hard load error (exit `2`) rather than a silently ignored no-op.
 
   ```
   src/foo/bar.ts
-    3:10  error    Cannot import a package-private export 'x'  import-access/jsdoc
-    5:1   warning  Unresolved import specifier './gone'         import-access/unresolved
+    3:10  error  Cannot import a package-private export 'x'  package-access
+    5:10  warning  Unresolved import specifier './gone'  import-access/unresolved
 
   ✖ 2 problems (1 error, 1 warning)
   ```
@@ -405,8 +405,8 @@ vim.lsp.enable('import_lint')
 
 ## Migration from eslint-plugin-import-access
 
-ImportLint's `jsdoc` rule is a behavioral port of the plugin's `import-access/jsdoc`
-rule, intended as a drop-in replacement:
+ImportLint's `package-access` rule is a behavioral port of the plugin's
+`import-access/jsdoc` rule, intended as a drop-in replacement:
 
 - **Swap the package**: in `package.json` `devDependencies`, replace
   `eslint-plugin-import-access` with `@import-lint/cli`
@@ -416,10 +416,13 @@ rule, intended as a drop-in replacement:
 - **Options map 1:1, name-for-name**, with the same defaults: `indexLoophole`,
   `filenameLoophole`, `defaultImportability`, `treatSelfReferenceAs`,
   `excludeSourcePatterns`, `packageDirectory`. Copy your rule options straight into
-  `rules.jsdoc` in `.importlintrc.jsonc`.
-- The `json` output format's `ruleId` is `import-access/jsdoc`, matching the
-  plugin's own rule ID, so existing ESLint-output consumers (CI parsers, reviewdog,
-  etc.) need no changes.
+  `rules.package-access` in `.importlintrc.jsonc` (the ESLint plugin's
+  `import-access/jsdoc` rule name became `rules.jsdoc` in early ImportLint
+  releases and is now `rules.package-access`; a config still using `rules.jsdoc`
+  fails to load with a message naming both keys).
+- The `json` output format's `ruleId` is `package-access` (not
+  `import-access/jsdoc`) — update any CI filter or `reviewdog` rule-ID match that
+  keyed off the ESLint plugin's rule ID.
 - Same one-hop re-export semantics: only the directly-imported file's own JSDoc (or
   its `export * from` chain) governs a re-export's importability — never a second
   hop through what *that* file re-exports.

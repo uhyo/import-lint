@@ -39,7 +39,7 @@ npx import-lint
 npx import-lint --format json
 ```
 
-With no config file, ImportLint lints `.` with the `jsdoc` rule at `error`
+With no config file, ImportLint lints `.` with the `package-access` rule at `error`
 severity and defaults matching `eslint-plugin-import-access`.
 
 ## Use in CI

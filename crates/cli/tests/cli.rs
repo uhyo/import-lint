@@ -97,7 +97,7 @@ fn package_violation_pretty_output_exits_1_with_no_ansi() {
         out.stdout
             .contains("Cannot import a package-private export 'helper'")
     );
-    assert!(out.stdout.contains("import-access/jsdoc"));
+    assert!(out.stdout.contains("package-access"));
     assert!(has_location_line(&out.stdout, "error"));
     assert!(!out.stdout.contains('\x1b'), "stdout: {}", out.stdout);
 }
@@ -109,7 +109,7 @@ fn severity_warn_exits_0_and_renders_as_warning() {
     write(
         dir.path(),
         ".importlintrc.jsonc",
-        r#"{ "rules": { "jsdoc": { "severity": "warn" } } }"#,
+        r#"{ "rules": { "package-access": { "severity": "warn" } } }"#,
     );
 
     let out = run_in(dir.path(), &[]);
@@ -129,7 +129,7 @@ fn severity_warn_with_quiet_suppresses_all_output() {
     write(
         dir.path(),
         ".importlintrc.jsonc",
-        r#"{ "rules": { "jsdoc": { "severity": "warn" } } }"#,
+        r#"{ "rules": { "package-access": { "severity": "warn" } } }"#,
     );
 
     let out = run_in(dir.path(), &["--quiet"]);
@@ -145,7 +145,7 @@ fn severity_off_exits_0_with_no_output() {
     write(
         dir.path(),
         ".importlintrc.jsonc",
-        r#"{ "rules": { "jsdoc": { "severity": "off" } } }"#,
+        r#"{ "rules": { "package-access": { "severity": "off" } } }"#,
     );
 
     let out = run_in(dir.path(), &[]);
@@ -188,7 +188,7 @@ fn json_format_matches_eslint_shape() {
     assert_eq!(consumer_entry["errorCount"], 1);
     assert_eq!(consumer_entry["warningCount"], 0);
     let message = &consumer_entry["messages"][0];
-    assert_eq!(message["ruleId"], "import-access/jsdoc");
+    assert_eq!(message["ruleId"], "package-access");
     assert_eq!(message["severity"], 2);
     assert_eq!(message["messageId"], "package");
 }
@@ -272,6 +272,26 @@ fn unknown_config_key_exits_2_and_mentions_key_and_file() {
     assert!(out.stderr.contains("includ"), "stderr: {}", out.stderr);
     assert!(
         out.stderr.contains(".importlintrc.jsonc"),
+        "stderr: {}",
+        out.stderr
+    );
+}
+
+#[test]
+fn jsdoc_rule_key_exits_2_and_prints_the_rename_hint() {
+    let dir = TempDir::new().unwrap();
+    write(
+        dir.path(),
+        ".importlintrc.jsonc",
+        r#"{ "rules": { "jsdoc": { "severity": "warn" } } }"#,
+    );
+
+    let out = run_in(dir.path(), &[]);
+
+    assert_eq!(out.status.code(), Some(2));
+    assert!(
+        out.stderr
+            .contains("the rule \"jsdoc\" was renamed to \"package-access\"; update your config"),
         "stderr: {}",
         out.stderr
     );

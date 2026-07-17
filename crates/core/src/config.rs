@@ -12,7 +12,7 @@ use std::path::{Path, PathBuf};
 use jsonc_parser::ParseOptions;
 use serde::Deserialize;
 
-use crate::rule::JsdocRuleOptions;
+use crate::rule::PackageAccessRuleOptions;
 
 /// The `.importlintrc.jsonc` file names checked by [`find_config`], in priority
 /// order (jsonc wins over json in the same directory, D7).
@@ -45,18 +45,64 @@ impl Default for LintConfig {
 
 /// The `rules` map. A map (rather than a single option block) keeps the door open
 /// for future rules without a config-shape break (PLAN-v1.md §4).
-#[derive(Debug, Clone, Deserialize, Default)]
-#[serde(rename_all = "camelCase", deny_unknown_fields, default)]
+///
+/// Deserialized by hand (below) rather than via `deny_unknown_fields`, so that a
+/// `rules.jsdoc` key — the rule's pre-M11 name — gets its own dedicated error
+/// (D-R3) instead of the generic "unknown field" message a typo would get.
+#[derive(Debug, Clone, Default)]
 pub struct Rules {
-    pub jsdoc: JsdocRuleConfig,
+    pub package_access: PackageAccessRuleConfig,
 }
 
-/// The `jsdoc` rule's config entry: its severity plus its options, deserialized
-/// from the same JSON object (`{"severity": "warn", "indexLoophole": false, ...}`).
+/// Deserialization helper for [`Rules`]: every key is captured into `extra` first
+/// (see [`RawPackageAccessRuleConfig`] below for why a flatten-based capture is
+/// needed to preserve unknown-key detection), so [`Rules::deserialize`] can special-
+/// case a `jsdoc` key before falling back to a generic unknown-field error for
+/// anything else.
+#[derive(Debug, Clone, Deserialize, Default)]
+#[serde(default)]
+struct RawRules {
+    #[serde(rename = "package-access")]
+    package_access: Option<serde_json::Value>,
+    #[serde(flatten)]
+    extra: serde_json::Map<String, serde_json::Value>,
+}
+
+/// M11 (D-R3): the rule was renamed from `jsdoc` to `package-access`; a config
+/// still using the old key is a hard load error naming both keys, not a generic
+/// "unknown field" message and not a silent alias.
+const JSDOC_RENAME_HINT: &str =
+    "the rule \"jsdoc\" was renamed to \"package-access\"; update your config";
+
+impl<'de> Deserialize<'de> for Rules {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let mut raw = RawRules::deserialize(deserializer)?;
+        if raw.extra.contains_key("jsdoc") {
+            return Err(serde::de::Error::custom(JSDOC_RENAME_HINT));
+        }
+        if let Some(unknown_key) = raw.extra.keys().next() {
+            return Err(serde::de::Error::custom(format!(
+                "unknown field `{unknown_key}`, expected `package-access`"
+            )));
+        }
+        let package_access = match raw.package_access.take() {
+            Some(value) => serde_json::from_value(value).map_err(serde::de::Error::custom)?,
+            None => PackageAccessRuleConfig::default(),
+        };
+        Ok(Rules { package_access })
+    }
+}
+
+/// The `package-access` rule's config entry: its severity plus its options,
+/// deserialized from the same JSON object (`{"severity": "warn", "indexLoophole":
+/// false, ...}`).
 #[derive(Debug, Clone, Default)]
-pub struct JsdocRuleConfig {
+pub struct PackageAccessRuleConfig {
     pub severity: Severity,
-    pub options: JsdocRuleOptions,
+    pub options: PackageAccessRuleOptions,
 }
 
 /// Deserialization helper: `#[serde(flatten)]` cannot be combined with
@@ -65,27 +111,27 @@ pub struct JsdocRuleConfig {
 /// erroring at either compile or run time (a known serde limitation; see
 /// serde-rs/serde#1600). So `severity` is parsed as its own named field here, and
 /// every other key is captured into `extra` as a generic JSON object, which then
-/// gets deserialized into `JsdocRuleOptions` as a completely separate (non-flatten)
-/// pass — an ordinary `Deserialize` call, where `deny_unknown_fields` works exactly
-/// as documented.
+/// gets deserialized into `PackageAccessRuleOptions` as a completely separate
+/// (non-flatten) pass — an ordinary `Deserialize` call, where `deny_unknown_fields`
+/// works exactly as documented.
 #[derive(Debug, Clone, Deserialize, Default)]
 #[serde(rename_all = "camelCase", default)]
-struct RawJsdocRuleConfig {
+struct RawPackageAccessRuleConfig {
     severity: Severity,
     #[serde(flatten)]
     extra: serde_json::Map<String, serde_json::Value>,
 }
 
-impl<'de> Deserialize<'de> for JsdocRuleConfig {
+impl<'de> Deserialize<'de> for PackageAccessRuleConfig {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: serde::Deserializer<'de>,
     {
-        let raw = RawJsdocRuleConfig::deserialize(deserializer)?;
-        let options: JsdocRuleOptions =
+        let raw = RawPackageAccessRuleConfig::deserialize(deserializer)?;
+        let options: PackageAccessRuleOptions =
             serde_json::from_value(serde_json::Value::Object(raw.extra))
                 .map_err(serde::de::Error::custom)?;
-        Ok(JsdocRuleConfig {
+        Ok(PackageAccessRuleConfig {
             severity: raw.severity,
             options,
         })
@@ -176,8 +222,8 @@ mod tests {
         assert_eq!(config.include, vec!["."]);
         assert!(config.exclude.is_empty());
         assert!(config.tsconfig.is_none());
-        assert_eq!(config.rules.jsdoc.severity, Severity::Error);
-        assert!(config.rules.jsdoc.options.index_loophole);
+        assert_eq!(config.rules.package_access.severity, Severity::Error);
+        assert!(config.rules.package_access.options.index_loophole);
     }
 
     #[test]
@@ -190,7 +236,7 @@ mod tests {
                 // a comment
                 "include": ["src"],
                 "rules": {
-                    "jsdoc": {
+                    "package-access": {
                         "severity": "warn",
                         "indexLoophole": false, // trailing comma below
                     },
@@ -199,8 +245,8 @@ mod tests {
         );
         let config = LintConfig::load(&path).expect("should parse");
         assert_eq!(config.include, vec!["src"]);
-        assert_eq!(config.rules.jsdoc.severity, Severity::Warn);
-        assert!(!config.rules.jsdoc.options.index_loophole);
+        assert_eq!(config.rules.package_access.severity, Severity::Warn);
+        assert!(!config.rules.package_access.options.index_loophole);
     }
 
     #[test]
@@ -214,7 +260,7 @@ mod tests {
                 "exclude": ["**/dist/**"],
                 "tsconfig": "./tsconfig.json",
                 "rules": {
-                    "jsdoc": {
+                    "package-access": {
                         "severity": "off",
                         "indexLoophole": false,
                         "filenameLoophole": true,
@@ -229,23 +275,23 @@ mod tests {
         let config = LintConfig::load(&path).expect("should parse");
         assert_eq!(config.exclude, vec!["**/dist/**"]);
         assert_eq!(config.tsconfig, Some(PathBuf::from("./tsconfig.json")));
-        assert_eq!(config.rules.jsdoc.severity, Severity::Off);
-        assert!(!config.rules.jsdoc.options.index_loophole);
-        assert!(config.rules.jsdoc.options.filename_loophole);
+        assert_eq!(config.rules.package_access.severity, Severity::Off);
+        assert!(!config.rules.package_access.options.index_loophole);
+        assert!(config.rules.package_access.options.filename_loophole);
         assert_eq!(
-            config.rules.jsdoc.options.default_importability,
+            config.rules.package_access.options.default_importability,
             Importability::Package
         );
         assert_eq!(
-            config.rules.jsdoc.options.treat_self_reference_as,
+            config.rules.package_access.options.treat_self_reference_as,
             SelfRefOpt::Internal
         );
         assert_eq!(
-            config.rules.jsdoc.options.exclude_source_patterns,
+            config.rules.package_access.options.exclude_source_patterns,
             vec!["**/*.gen.ts".to_string()]
         );
         assert_eq!(
-            config.rules.jsdoc.options.package_directory,
+            config.rules.package_access.options.package_directory,
             Some(vec!["**".to_string()])
         );
     }
@@ -269,7 +315,7 @@ mod tests {
         let path = write(
             dir.path(),
             ".importlintrc.jsonc",
-            r#"{ "rules": { "jsdoc": { "indexLoophol": false } } }"#,
+            r#"{ "rules": { "package-access": { "indexLoophol": false } } }"#,
         );
         let err = LintConfig::load(&path).expect_err("should reject typo'd option");
         assert!(err.to_string().contains("indexLoophol"), "error was: {err}");
@@ -281,10 +327,30 @@ mod tests {
         let path = write(
             dir.path(),
             ".importlintrc.jsonc",
-            r#"{ "rules": { "jsdco": {} } }"#,
+            r#"{ "rules": { "package-acces": {} } }"#,
         );
         let err = LintConfig::load(&path).expect_err("should reject typo'd rule name");
-        assert!(err.to_string().contains("jsdco"), "error was: {err}");
+        assert!(
+            err.to_string().contains("package-acces"),
+            "error was: {err}"
+        );
+    }
+
+    #[test]
+    fn jsdoc_rule_key_is_rejected_with_the_rename_hint() {
+        let dir = TempDir::new().unwrap();
+        let path = write(
+            dir.path(),
+            ".importlintrc.jsonc",
+            r#"{ "rules": { "jsdoc": { "severity": "warn" } } }"#,
+        );
+        let err = LintConfig::load(&path).expect_err("should reject the renamed rule key");
+        assert!(
+            err.to_string().contains(
+                "the rule \"jsdoc\" was renamed to \"package-access\"; update your config"
+            ),
+            "error was: {err}"
+        );
     }
 
     #[test]

@@ -12,8 +12,8 @@ use std::path::{Path, PathBuf};
 use clap::ValueEnum;
 
 /// A scaffold-time config template, selected via `--preset <name>` or the
-/// interactive picker (D-I2). The `jsdoc` rule's two axes that actually
-/// distinguish real-world setups — `defaultImportability` and
+/// interactive picker (D-I2). The `package-access` rule's two axes that
+/// actually distinguish real-world setups — `defaultImportability` and
 /// `packageDirectory` — are what vary between presets; everything else in the
 /// generated file is the same fully commented skeleton.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
@@ -82,7 +82,7 @@ const GRADUAL_TEMPLATE: &str = r#"// .importlintrc.jsonc
   // "tsconfig": "./tsconfig.json",
 
   "rules": {
-    "jsdoc": {
+    "package-access": {
       // "error" | "warn" | "off". An `off` rule is never checked.
       "severity": "error",
 
@@ -142,7 +142,7 @@ const STANDARD_TEMPLATE: &str = r#"// .importlintrc.jsonc
   // "tsconfig": "./tsconfig.json",
 
   "rules": {
-    "jsdoc": {
+    "package-access": {
       // "error" | "warn" | "off". An `off` rule is never checked.
       "severity": "error",
 
@@ -215,7 +215,7 @@ const MONOREPO_TEMPLATE: &str = r#"// .importlintrc.jsonc
   // "tsconfig": "./tsconfig.json",
 
   "rules": {
-    "jsdoc": {
+    "package-access": {
       // "error" | "warn" | "off". An `off` rule is never checked.
       "severity": "error",
 
@@ -430,11 +430,11 @@ mod tests {
         let (_dir, path) = write_template(Preset::Standard);
         let config = import_lint::LintConfig::load(&path).expect("should parse");
         assert_eq!(
-            config.rules.jsdoc.options.default_importability,
+            config.rules.package_access.options.default_importability,
             Importability::Package
         );
         assert_eq!(
-            config.rules.jsdoc.options.package_directory,
+            config.rules.package_access.options.package_directory,
             Some(vec!["**/*.package".to_string()])
         );
     }
@@ -443,21 +443,21 @@ mod tests {
     fn gradual_template_round_trips_at_all_defaults() {
         let (_dir, path) = write_template(Preset::Gradual);
         let config = import_lint::LintConfig::load(&path).expect("should parse");
-        let defaults = import_lint::JsdocRuleOptions::default();
+        let defaults = import_lint::PackageAccessRuleOptions::default();
         assert_eq!(
-            config.rules.jsdoc.options.default_importability,
+            config.rules.package_access.options.default_importability,
             defaults.default_importability
         );
         assert_eq!(
-            config.rules.jsdoc.options.index_loophole,
+            config.rules.package_access.options.index_loophole,
             defaults.index_loophole
         );
         assert_eq!(
-            config.rules.jsdoc.options.filename_loophole,
+            config.rules.package_access.options.filename_loophole,
             defaults.filename_loophole
         );
         assert_eq!(
-            config.rules.jsdoc.options.package_directory,
+            config.rules.package_access.options.package_directory,
             defaults.package_directory
         );
         assert_eq!(config.include, vec!["."]);
@@ -469,11 +469,11 @@ mod tests {
         let (_dir, path) = write_template(Preset::Monorepo);
         let config = import_lint::LintConfig::load(&path).expect("should parse");
         assert_eq!(
-            config.rules.jsdoc.options.default_importability,
+            config.rules.package_access.options.default_importability,
             Importability::Package
         );
         assert_eq!(
-            config.rules.jsdoc.options.package_directory,
+            config.rules.package_access.options.package_directory,
             Some(vec!["packages/*".to_string()])
         );
     }

@@ -348,7 +348,7 @@ fn initial_publish_reports_existing_violation() {
     let diagnostic = &diagnostics[0];
     assert_eq!(
         diagnostic.code,
-        Some(NumberOrString::String("import-access/jsdoc".to_string()))
+        Some(NumberOrString::String("package-access".to_string()))
     );
     assert_eq!(diagnostic.source.as_deref(), Some("import-lint"));
     assert_eq!(

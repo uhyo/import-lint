@@ -114,7 +114,7 @@ mod tests {
             end_line: 3,
             end_column: 20,
             severity,
-            rule_id: "import-access/jsdoc",
+            rule_id: "package-access",
             message: "Cannot import a package-private export 'x'".to_string(),
             message_id: "package".to_string(),
         }
@@ -137,7 +137,7 @@ mod tests {
         assert!(text.contains("src/a.ts"));
         assert!(text.contains("3:10"));
         assert!(text.contains("Cannot import a package-private export 'x'"));
-        assert!(text.contains("import-access/jsdoc"));
+        assert!(text.contains("package-access"));
         assert!(text.contains("1 problem (1 error, 0 warnings)"));
     }
 

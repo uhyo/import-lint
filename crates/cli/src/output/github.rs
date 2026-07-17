@@ -52,7 +52,7 @@ mod tests {
                 end_line: 3,
                 end_column: 20,
                 severity: OutputSeverity::Error,
-                rule_id: "import-access/jsdoc",
+                rule_id: "package-access",
                 message: "Cannot import ...".to_string(),
                 message_id: "private".to_string(),
             },

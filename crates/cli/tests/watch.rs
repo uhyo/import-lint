@@ -116,7 +116,7 @@ fn config_changed_reloads_severity_and_survives_a_subsequently_invalid_config() 
 
     fs::write(
         &config_path,
-        r#"{ "rules": { "jsdoc": { "severity": "warn" } } }"#,
+        r#"{ "rules": { "package-access": { "severity": "warn" } } }"#,
     )
     .unwrap();
     let outcome = session.run_cycle(&[ChangeKind::ConfigChanged]);
