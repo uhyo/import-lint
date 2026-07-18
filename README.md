@@ -269,8 +269,9 @@ explains each with a worked example.
 
       // Glob patterns identifying "package" directories (matched against both
       // basename and project-relative path). Unset: a file's own containing
-      // directory is its package. A `!`-prefixed pattern excludes a directory
-      // that would otherwise match.
+      // directory is its package. When set, a file with no matching ancestor
+      // belongs to a single project-root package. A `!`-prefixed pattern
+      // excludes a directory that would otherwise match.
       // "packageDirectory": ["packages/*"],
     }
   }
@@ -436,6 +437,14 @@ ImportLint's `package-access` rule is a behavioral port of the plugin's
 - The `json` output format's `ruleId` is `package-access` (not
   `import-access/jsdoc`) — update any CI filter or `reviewdog` rule-ID match that
   keyed off the ESLint plugin's rule ID.
+- **One deliberate behavioral divergence**: with `packageDirectory` set, a file
+  that has *no* matching ancestor directory belongs to a single project-root
+  package (all such files import freely from each other), where the plugin
+  falls back to the file's own directory as its package. If you relied on the
+  plugin's fallback to keep unmatched directories sealed off from each other,
+  add patterns matching those directories (or `"**"`) to `packageDirectory`.
+  For everyone else this only *removes* errors — it's what makes gradually
+  adopting a boundary-naming convention like `["**/*.package"]` possible.
 - Same one-hop re-export semantics: only the directly-imported file's own JSDoc (or
   its `export * from` chain) governs a re-export's importability — never a second
   hop through what *that* file re-exports.

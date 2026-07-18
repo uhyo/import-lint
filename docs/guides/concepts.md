@@ -227,8 +227,15 @@ src/checkout/pay.ts
 A `!`-prefixed pattern excludes a directory that would otherwise match — e.g.
 `["**", "!**/scratch"]` makes every directory a boundary except ones named
 `scratch`, whose files fall back to their *parent's* boundary instead. A file
-outside every matching boundary (and not excluded into one) falls back to
-its own containing directory, same as the no-`packageDirectory` default.
+with **no** matching ancestor at all belongs to one project-wide package rooted
+at the project root: all such files import freely from each other (and from
+inside them, boundary-dwelling files can still reach root-package exports, per
+the nesting rule above), while matched boundaries stay sealed. So with
+`["**/*.package"]` on a codebase with no `*.package` directories yet, nothing
+is restricted — each directory you rename adds one enforced boundary, which is
+what makes gradual adoption of the naming convention work. (This is a
+deliberate divergence from `eslint-plugin-import-access`, which treats every
+unmatched file's own directory as its package.)
 
 ## Index loophole
 

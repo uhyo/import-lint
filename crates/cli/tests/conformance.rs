@@ -2,8 +2,11 @@
 //! `tests/conformance/fixtures/project/src` with ImportLint under each option set
 //! captured in `tests/conformance/expected/manifest.json`, and diff the resulting
 //! diagnostics against that option set's `expected/<name>.json` snapshot — the
-//! reference plugin's own recorded output. See `tests/conformance/README.md` for
-//! the snapshot shape and how these were generated.
+//! reference plugin's own recorded output, except for
+//! `package-directory-packages-glob`, which records ImportLint's deliberately
+//! divergent project-root fallback for files outside every `packageDirectory`
+//! match. See `tests/conformance/README.md` for the snapshot shape, how these
+//! were generated, and the "Documented divergences" section.
 //!
 //! `tests/conformance/fixtures/{project,packages}` are never modified in place:
 //! each test run copies the whole fixture tree into a fresh `TempDir` and builds

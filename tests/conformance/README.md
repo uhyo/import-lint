@@ -47,6 +47,11 @@ node tests/conformance/oracle/generate-snapshots.mjs /path/to/eslint-plugin-impo
 REFERENCE_REPO=/path/to/eslint-plugin-import-access node tests/conformance/oracle/generate-snapshots.mjs
 ```
 
+**After regenerating**: the script writes the oracle's verbatim output, which
+for `package-directory-packages-glob` is NOT what ImportLint should produce —
+re-apply the documented divergence below to that one file (or restore it from
+git and diff by hand) before committing.
+
 Defaults to `/home/uhyo/repos/eslint-plugin-import-access` if no path is given.
 The script:
 
@@ -90,7 +95,36 @@ themselves), enumerated by grepping every `lintFile(` call site:
 | `package-directory-no-internal` | `{ packageDirectory: ["**", "!**/_internal"] }` | 28 |
 | `package-directory-all-star` | `{ packageDirectory: ["**"] }` | 30 |
 | `package-directory-no-internal-filename-loophole` | `{ packageDirectory: ["**", "!**/_internal"], filenameLoophole: true }` | 25 |
-| `package-directory-packages-glob` | `{ packageDirectory: ["src/package-directory/packages/*"] }` | 29 |
+| `package-directory-packages-glob` | `{ packageDirectory: ["src/package-directory/packages/*"] }` | 3 (†) |
+
+(†) `package-directory-packages-glob` is the one snapshot that is **not** the
+oracle's verbatim output — see "Documented divergences" below.
+
+## Documented divergences from the reference plugin
+
+ImportLint deliberately diverges from the reference in one case: when
+`packageDirectory` is set and a file has **no** matching ancestor directory, the
+reference falls back to the file's own parent directory (resurrecting
+directory-per-package semantics for every unmatched file), while ImportLint
+falls back to the **project root**, so all files outside every configured
+boundary share one project-wide package. This makes gradual adoption of a
+naming convention like `["**/*.package"]` possible (see
+`crates/core/src/rule/in_package.rs` module docs).
+
+Consequence for `package-directory-packages-glob` (the only captured option set
+whose patterns leave some fixture files unmatched — the `**`-based sets always
+match an ancestor): the oracle produces 29 diagnostics, ImportLint 3. The
+26 dropped diagnostics are exactly the `package`/`package:reexport` violations
+where importer and exporter both live outside
+`src/package-directory/packages/*` — same root package now, so allowed. The
+3 kept are the two `private` diagnostics (never affected by package
+boundaries) and `packages/packageB/crossUser.ts` reaching into `packageA`
+(both inside matched boundaries). The checked-in
+`expected/package-directory-packages-glob.json` records ImportLint's intended
+output, hand-derived from the oracle's by applying that rule. (This also makes
+the fixture comment in `src/package-directory/crossPackageUser.ts` — "should
+fail even with packageDirectory option" — stale for *this* option set; the
+fixture tree is a pinned copy of the reference's and is left unmodified.)
 
 Note: `default-importability-private-self-reference-external` is byte-for-byte
 identical to `default-importability-private` — `treatSelfReferenceAs:

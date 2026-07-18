@@ -195,6 +195,11 @@ const optionSets = [
     },
   },
   {
+    // CAUTION: the checked-in expected/package-directory-packages-glob.json is
+    // NOT this script's verbatim output — ImportLint deliberately diverges from
+    // the reference for files outside every packageDirectory match (project-root
+    // fallback instead of parent-directory fallback). After regenerating,
+    // re-apply the divergence documented in ../README.md to that one file.
     name: "package-directory-packages-glob",
     options: { packageDirectory: ["src/package-directory/packages/*"] },
   },

@@ -54,6 +54,12 @@ automatically a boundary. `tutorial.md` walks through creating one boundary,
 hitting a real violation, and fixing it three ways — that walkthrough *is*
 this preset's day-to-day workflow.
 
+It's also safe to adopt incrementally on an existing codebase: files outside
+every `*.package` directory all belong to one project-root package, so with no
+`*.package` directories yet this config restricts nothing — each directory you
+rename to `foo.package/` seals off exactly that one boundary, and the rest of
+the codebase keeps compiling (well, linting) clean.
+
 Two variants of the same idea, if `*.package` naming doesn't fit your
 project (swap into `packageDirectory` instead of `["**/*.package"]`):
 

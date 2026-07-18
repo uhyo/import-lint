@@ -1,4 +1,4 @@
-//! Exact port of the reference plugin's `isInPackage` (spec §4.2–§4.4): decides
+//! Port of the reference plugin's `isInPackage` (spec §4.2–§4.4): decides
 //! whether an importer and a `package`-access exporter live in "the same package",
 //! where "package" means a directory (by default) or a glob-matched ancestor
 //! directory (`packageDirectory` option), with two configurable loopholes
@@ -6,8 +6,16 @@
 //!
 //! Ported field-for-field from the TypeScript reference (see the M3 brief for the
 //! exact source quoted) rather than re-derived from the spec prose — glob-matching
-//! order, the fallback-to-`dirname` behavior, and which of the original/index-adjusted
-//! exporter path is used where are all easy to get subtly wrong from prose alone.
+//! order and which of the original/index-adjusted exporter path is used where are
+//! all easy to get subtly wrong from prose alone.
+//!
+//! One deliberate divergence from the reference: when `packageDirectory` is set
+//! and a file has NO matching ancestor, the reference falls back to the file's
+//! own parent directory — silently resurrecting directory-per-package semantics
+//! for every not-yet-migrated file, which makes gradual adoption of a naming
+//! convention like `["**/*.package"]` impossible. ImportLint instead falls back
+//! to the project root, so all files outside every configured boundary share one
+//! project-wide package (see `find_package_directory`).
 
 use std::path::{Path, PathBuf};
 
@@ -162,19 +170,20 @@ fn is_package_directory(
 
 /// Walk up from `file_path`'s parent directory to the filesystem root, returning
 /// the first ancestor directory that qualifies as a package directory under
-/// `patterns`; falls back to `file_path`'s own parent directory if none does
-/// (matching the ancestors' walk never reaching an actual match).
+/// `patterns`; falls back to `project_directory` if none does, so every file
+/// outside all configured boundaries belongs to a single project-root package.
+/// (Deliberate divergence from the reference plugin, which falls back to the
+/// file's own parent directory — see the module docs.)
 fn find_package_directory(
     file_path: &Path,
     patterns: &[CompiledPattern],
     project_directory: &Path,
 ) -> PathBuf {
-    let start_dir = file_path
+    let root = Path::new("/");
+    let mut dir = file_path
         .parent()
         .map(Path::to_path_buf)
         .unwrap_or_else(|| file_path.to_path_buf());
-    let root = Path::new("/");
-    let mut dir = start_dir.clone();
 
     while dir != root {
         if is_package_directory(&dir, patterns, project_directory) {
@@ -185,7 +194,7 @@ fn find_package_directory(
             _ => break,
         }
     }
-    start_dir
+    project_directory.to_path_buf()
 }
 
 /// `getPackageDirectory`: the "package directory" a file belongs to — either the
@@ -393,6 +402,46 @@ mod tests {
         assert!(is_in_package(
             Path::new("/proj/x/user.ts"),
             Path::new("/proj/x/_internal/helper.ts"),
+            &o
+        ));
+    }
+
+    #[test]
+    fn package_directory_unmatched_files_share_root_package() {
+        // Neither file has a *.package ancestor, so both fall back to the
+        // project root as their package — even across unrelated directories.
+        // (Under the reference plugin's parent-directory fallback this failed,
+        // which made gradual adoption of the naming convention impossible.)
+        let o = opts_with(true, false, Some(&["*.package"]));
+        assert!(is_in_package(
+            Path::new("/proj/src/a/x.ts"),
+            Path::new("/proj/lib/b/y.ts"),
+            &o
+        ));
+    }
+
+    #[test]
+    fn package_directory_unmatched_importer_cannot_reach_into_package() {
+        // The importer falls back to the root package; the exporter is inside
+        // auth.package. Root is an ancestor of the boundary, not a descendant,
+        // so the import fails — encapsulation of matched boundaries still holds.
+        let o = opts_with(true, false, Some(&["*.package"]));
+        assert!(!is_in_package(
+            Path::new("/proj/src/a.ts"),
+            Path::new("/proj/src/auth.package/b.ts"),
+            &o
+        ));
+    }
+
+    #[test]
+    fn package_directory_root_package_export_reachable_from_inside_package() {
+        // The exporter falls back to the root package; an importer inside
+        // auth.package is a descendant of the root, so the import is allowed
+        // (same ancestor-package rule as nested matched boundaries).
+        let o = opts_with(true, false, Some(&["*.package"]));
+        assert!(is_in_package(
+            Path::new("/proj/src/auth.package/a.ts"),
+            Path::new("/proj/src/b.ts"),
             &o
         ));
     }

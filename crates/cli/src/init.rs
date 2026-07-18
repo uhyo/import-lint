@@ -111,8 +111,9 @@ const GRADUAL_TEMPLATE: &str = r#"// .importlintrc.jsonc
 
       // Glob patterns identifying "package" directories (matched against both
       // basename and project-relative path). Unset: a file's own containing
-      // directory is its package. A `!`-prefixed pattern excludes a directory
-      // that would otherwise match.
+      // directory is its package. When set, a file with no matching ancestor
+      // belongs to a single project-root package. A `!`-prefixed pattern
+      // excludes a directory that would otherwise match.
       // "packageDirectory": ["packages/*"],
     }
   }
@@ -164,9 +165,10 @@ const STANDARD_TEMPLATE: &str = r#"// .importlintrc.jsonc
 
       // Access level assumed for an export with no recognized JSDoc access tag.
       // "public" | "package" | "private". "package" makes every `*.package`
-      // boundary (see packageDirectory below) — and, outside of one, every
-      // plain directory — an encapsulation boundary by default, with no JSDoc
-      // tag required.
+      // boundary (see packageDirectory below) an encapsulation boundary by
+      // default, with no JSDoc tag required. Files outside every boundary all
+      // share one project-root package, so they import freely from each other
+      // — adopt boundaries one directory rename at a time.
       "defaultImportability": "package",
 
       // How a bare specifier matching the importer's own package name is
@@ -178,13 +180,14 @@ const STANDARD_TEMPLATE: &str = r#"// .importlintrc.jsonc
       "excludeSourcePatterns": [],
 
       // Glob patterns identifying "package" directories (matched against both
-      // basename and project-relative path). A `!`-prefixed pattern excludes a
-      // directory that would otherwise match. Below: the `*.package` naming
-      // convention — a directory is a boundary because of its name, not its
-      // location, so this never needs updating as the project grows.
+      // basename and project-relative path). A file with no matching ancestor
+      // belongs to a single project-root package. A `!`-prefixed pattern
+      // excludes a directory that would otherwise match. Below: the `*.package`
+      // naming convention — a directory is a boundary because of its name, not
+      // its location, so this never needs updating as the project grows.
       //
       // Alternative conventions (uncomment one instead, or drop the option
-      // entirely to fall back to per-directory scoping outside any boundary):
+      // entirely to make every directory its own package):
       // "packageDirectory": ["**", "!**/*.internal"],  // inverse naming: every
       //   directory is a boundary except ones opting out with an ".internal" name
       // "packageDirectory": ["src/packages/*"],  // fixed-location: boundaries
@@ -251,7 +254,8 @@ const MONOREPO_TEMPLATE: &str = r#"// .importlintrc.jsonc
       // Glob patterns identifying "package" directories (matched against both
       // basename and project-relative path). Adjust to match your workspace
       // layout — e.g. add "apps/*" if you also have an apps/ directory of
-      // workspace packages.
+      // workspace packages. Files outside every workspace package (root
+      // scripts, shared config) all share one project-root package.
       "packageDirectory": ["packages/*"],
     }
   }
