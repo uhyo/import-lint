@@ -1,6 +1,6 @@
 # Adoption
 
-Documents ImportLint v0.1.4.
+Documents ImportLint v0.1.5.
 
 ImportLint's `package-access` rule enforces directory-level encapsulation:
 in the recommended setup, exports stay inside their "package" unless tagged

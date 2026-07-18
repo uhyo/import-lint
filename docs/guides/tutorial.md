@@ -1,6 +1,6 @@
 # Tutorial: your first boundary
 
-Documents ImportLint v0.1.4.
+Documents ImportLint v0.1.5.
 
 This is a hands-on, ~10-minute walkthrough: create one encapsulation
 boundary, trigger a real violation, and fix it three different ways. It
