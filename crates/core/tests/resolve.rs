@@ -19,13 +19,15 @@ struct Project {
     /// returns, so expected `Internal(path)` values must be built from a
     /// canonical root too — on macOS `TempDir` lives behind the
     /// `/var` -> `/private/var` symlink, and the raw path wouldn't match.
+    /// `dunce`, not std, to avoid Windows `\\?\`-verbatim paths (matching
+    /// what the CLI's walker feeds the resolver).
     root: PathBuf,
 }
 
 impl Project {
     fn new() -> Self {
         let dir = TempDir::new().expect("create tempdir");
-        let root = dir.path().canonicalize().expect("canonicalize tempdir");
+        let root = dunce::canonicalize(dir.path()).expect("canonicalize tempdir");
         Self { _dir: dir, root }
     }
 

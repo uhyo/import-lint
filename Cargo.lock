@@ -336,6 +336,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fd8e701084c37e7ef62d3f9e453b618130cbc0ef3573847785952a3ac3f746bf"
 
 [[package]]
+name = "dunce"
+version = "1.0.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "92773504d58c093f6de2459af4af33faa518c13451eb8f2b5698ed3d36e7c813"
+
+[[package]]
 name = "either"
 version = "1.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -649,6 +655,7 @@ version = "0.1.4"
 dependencies = [
  "clap",
  "crossbeam-channel",
+ "dunce",
  "gen-fixture",
  "ignore",
  "import-lint-core",
@@ -671,6 +678,7 @@ name = "import-lint-core"
 version = "0.1.4"
 dependencies = [
  "criterion",
+ "dunce",
  "globset",
  "jsonc-parser",
  "nodejs-built-in-modules",

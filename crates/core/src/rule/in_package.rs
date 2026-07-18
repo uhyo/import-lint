@@ -67,23 +67,16 @@ pub fn compile_package_directory_patterns(patterns: &[String]) -> Vec<CompiledPa
         .collect()
 }
 
-/// `path.relative(from, to)`, Node's algorithm restricted to two absolute POSIX
-/// paths: split into components, drop the common prefix, then `..` for each
-/// remaining `from` component followed by the remaining `to` components, joined
-/// with `/`. Two equal paths yield `""`.
+/// `path.relative(from, to)`, Node's algorithm over two absolute paths: split
+/// into components, drop the common prefix, then `..` for each remaining
+/// `from` component followed by the remaining `to` components, joined with
+/// `/` (always `/`, whatever the platform separator — the result feeds glob
+/// matchers compiled with `/` as the literal separator). Two equal paths
+/// yield `""`. Built on `Path::components()` rather than string-splitting so
+/// Windows separators (and mixed-separator paths) divide correctly.
 pub(crate) fn node_relative(from: &Path, to: &Path) -> String {
-    let from_components: Vec<&str> = from
-        .to_str()
-        .unwrap_or("")
-        .split('/')
-        .filter(|s| !s.is_empty())
-        .collect();
-    let to_components: Vec<&str> = to
-        .to_str()
-        .unwrap_or("")
-        .split('/')
-        .filter(|s| !s.is_empty())
-        .collect();
+    let from_components: Vec<_> = from.components().collect();
+    let to_components: Vec<_> = to.components().collect();
 
     let common = from_components
         .iter()
@@ -92,7 +85,11 @@ pub(crate) fn node_relative(from: &Path, to: &Path) -> String {
         .count();
 
     let mut parts: Vec<&str> = std::iter::repeat_n("..", from_components.len() - common).collect();
-    parts.extend(&to_components[common..]);
+    parts.extend(
+        to_components[common..]
+            .iter()
+            .map(|c| c.as_os_str().to_str().unwrap_or("")),
+    );
     parts.join("/")
 }
 

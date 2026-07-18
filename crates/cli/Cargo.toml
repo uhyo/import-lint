@@ -21,6 +21,7 @@ path = "src/main.rs"
 [dependencies]
 clap = { workspace = true }
 crossbeam-channel = { workspace = true }
+dunce = { workspace = true }
 ignore = { workspace = true }
 import_lint = { path = "../core", package = "import-lint-core", version = "0.1.4" }
 lsp-server = { workspace = true }

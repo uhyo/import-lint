@@ -173,9 +173,9 @@ fn setup_fixture() -> (TempDir, PathBuf) {
         );
     }
 
-    let project_root = project_dir
-        .canonicalize()
-        .expect("canonicalize project dir");
+    // dunce, not std: Windows verbatim (\\?\) roots would leak into every
+    // path the walker and rule engine compare (see crates/cli/src/walk.rs).
+    let project_root = dunce::canonicalize(&project_dir).expect("canonicalize project dir");
     (tmp, project_root)
 }
 

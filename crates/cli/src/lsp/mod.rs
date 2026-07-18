@@ -167,7 +167,7 @@ fn resolve_workspace_root(params: &InitializeParams) -> (PathBuf, Option<String>
 /// canonical `cwd`; only file-identity paths inside the graph do).
 fn uri_to_dir_path(uri: &Url) -> Option<PathBuf> {
     let path = uri.to_file_path().ok()?;
-    Some(path.canonicalize().unwrap_or(path))
+    Some(dunce::canonicalize(&path).unwrap_or(path))
 }
 
 fn supports_watched_files_registration(capabilities: &ClientCapabilities) -> bool {

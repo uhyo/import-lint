@@ -26,6 +26,11 @@ oxc_str = { version = "=0.139.0", features = ["serialize"] }
 
 # Other dependencies anticipated by docs/PLAN-v1.md (not oxc, so caret ranges are fine).
 clap = { version = "4.6", features = ["derive"] }
+# std::fs::canonicalize returns \\?\-verbatim paths on Windows, inside which
+# std's Path parser treats `/` as a literal character; since the resolver
+# joins with `/`, verbatim graph keys break every directory comparison in the
+# rule engine. dunce::canonicalize strips the verbatim prefix when safe.
+dunce = "1.0"
 globset = "0.4"
 ignore = "0.4"
 jsonc-parser = "0.33"

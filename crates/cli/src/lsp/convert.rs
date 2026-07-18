@@ -6,13 +6,13 @@
 //! paths are canonicalized" contract. [`uri_to_canonical_path`] does that conversion;
 //! [`path_to_uri`] is its inverse for outgoing `publishDiagnostics`.
 //!
-//! Windows note: `url::Url::from_file_path` (verified against the `url` 2.5.8 source,
-//! `path_to_file_url_segments_windows`) treats a `\\?\`-verbatim disk prefix
-//! (`Prefix::VerbatimDisk`) identically to a plain drive prefix (`Prefix::Disk`) —
-//! both produce a normal `file:///C:/...` URI with no verbatim segments. So a
-//! canonicalized (verbatim-prefixed, on Windows) engine path converts to a clean URI
-//! with no extra stripping step needed (decision D-L7 anticipated needing the `dunce`
-//! crate for this; it turned out not to be necessary — see the L2 report).
+//! Windows note: canonicalization here is `dunce::canonicalize`, matching
+//! `walk.rs` — engine paths must not carry the `\\?\`-verbatim prefix, inside
+//! which std's `Path` parser stops treating `/` as a separator (the resolver
+//! joins with `/`, so verbatim keys would break the rule engine's directory
+//! comparisons; this is the problem decision D-L7 anticipated `dunce` for).
+//! `url::Url::from_file_path` accepts either form and produces a normal
+//! `file:///C:/...` URI in both cases.
 
 use std::path::{Path, PathBuf};
 
@@ -24,7 +24,7 @@ use crate::output::{OutputSeverity, RenderedDiagnostic};
 /// if the URI isn't a `file:` URI, doesn't exist on disk (untitled buffers, deleted
 /// files), or otherwise fails to canonicalize.
 pub fn uri_to_canonical_path(uri: &Url) -> Option<PathBuf> {
-    uri.to_file_path().ok()?.canonicalize().ok()
+    dunce::canonicalize(uri.to_file_path().ok()?).ok()
 }
 
 /// The inverse of [`uri_to_canonical_path`] for outgoing notifications: `None` if

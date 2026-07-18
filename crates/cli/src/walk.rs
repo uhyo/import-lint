@@ -104,7 +104,11 @@ pub fn walk_with_excludes(
 
             let is_file = entry.file_type().is_some_and(|ft| ft.is_file());
             if is_file && has_source_extension(entry.path()) {
-                match entry.path().canonicalize() {
+                // dunce, not std: std's canonicalize returns a \\?\-verbatim
+                // path on Windows, whose components std parses without
+                // treating `/` as a separator — which breaks comparison with
+                // resolver-produced paths (they join with `/`).
+                match dunce::canonicalize(entry.path()) {
                     Ok(canonical) => found.lock().unwrap().push(canonical),
                     Err(err) => {
                         eprintln!("import-lint: {}: {err}, skipping", entry.path().display());

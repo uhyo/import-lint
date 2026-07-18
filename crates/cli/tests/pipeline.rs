@@ -20,8 +20,8 @@ fn write(dir: &Path, relative: &str, contents: &str) {
 }
 
 fn canonical(path: &Path) -> PathBuf {
-    path.canonicalize()
-        .unwrap_or_else(|err| panic!("canonicalize {}: {err}", path.display()))
+    // dunce to match the walker's canonical form (no \\?\ prefix on Windows).
+    dunce::canonicalize(path).unwrap_or_else(|err| panic!("canonicalize {}: {err}", path.display()))
 }
 
 #[test]
