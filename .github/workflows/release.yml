@@ -48,7 +48,7 @@ jobs:
             archive: zip
             npm_key: win32-x64
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -103,7 +103,7 @@ jobs:
           7z a "${staging}.zip" "$staging"
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ env.BIN_NAME }}-${{ matrix.target }}
           path: |
@@ -115,7 +115,7 @@ jobs:
       # (npm/scripts/assemble.mjs copies it straight into a platform
       # package), not the tar.gz/zip release archive.
       - name: Upload npm binary
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: npm-binary-${{ matrix.npm_key }}
           path: |
@@ -130,10 +130,10 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Download artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           # Scoped to the release archives only — npm-binary-* (raw
           # binaries) and npm-packages (the assembled npm tree) are inputs
@@ -143,7 +143,7 @@ jobs:
           merge-multiple: true
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: dist/*
           generate_release_notes: true
@@ -153,14 +153,14 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 20
 
       - name: Download npm binaries
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           pattern: npm-binary-*
           path: npm-dist
@@ -205,7 +205,7 @@ jobs:
         run: tar -cf npm-packages.tar npm
 
       - name: Upload assembled npm tree
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: npm-packages
           path: npm-packages.tar
@@ -222,12 +222,12 @@ jobs:
       # No checkout: npm-packages.tar carries both the scripts and the
       # packages, and smoke.mjs (in --assembled mode) doesn't touch anything
       # else in the repo.
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 20
 
       - name: Download assembled npm tree
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: npm-packages
 
@@ -258,7 +258,7 @@ jobs:
       #   - NODE_AUTH_TOKEN must be completely unset (even an empty string
       #     makes npm use token auth instead of falling back to OIDC), so
       #     the publish step deliberately has no `env:` block.
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
           registry-url: "https://registry.npmjs.org"
@@ -267,7 +267,7 @@ jobs:
         run: npm install -g npm@latest
 
       - name: Download assembled npm tree
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: npm-packages
 
