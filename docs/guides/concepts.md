@@ -1,6 +1,6 @@
 # Concepts
 
-Documents ImportLint v0.1.3.
+Documents ImportLint v0.1.4.
 
 ImportLint enforces directory-level encapsulation for TypeScript and
 JavaScript: a directory is a "package", and in the recommended setup its
