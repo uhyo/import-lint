@@ -7,41 +7,45 @@ in the recommended setup, exports stay inside their "package" unless tagged
 `@public` — or, in the opt-in mode, stay public until tagged
 `@package`/`@private` — see [`concepts.md`](./concepts.md) for the full
 mental model, or [`tutorial.md`](./tutorial.md) for a hands-on walkthrough of
-one boundary end to end. This guide is about the next question: which of the
-three built-in `import-lint init` presets fits your project, and how do you
-actually roll it out.
+one boundary end to end. This guide is about the next question: which
+starting configuration fits your project, and how do you actually roll it
+out.
 
-A **preset** only picks starting values for two options — `defaultImportability`
-and `packageDirectory` — everything else is the same fully commented,
-fully editable config file (see the root README's
-[Config file](../../README.md#config-file) section for every option). Every
-command and config shown below is real, verified against the workspace
-binary.
+`import-lint init` scaffolds one fully commented config — the recommended
+**package-by-default** setup. The two other setups below differ from it only
+in the starting values of two options — `defaultImportability` and
+`packageDirectory` — everything else is the same fully editable config file
+(see the root README's [Config file](../../README.md#config-file) section for
+every option). Every command and config shown below is real, verified against
+the workspace binary.
 
-## Choosing a preset
+## Choosing a starting configuration
 
-| Preset | What's a boundary | What's restricted by default | Best for |
+| Setup | What's a boundary | What's restricted by default | Best for |
 |---|---|---|---|
-| `standard` | Any directory named `foo.package` (`packageDirectory: ["**/*.package"]`) | Everything inside a boundary — tag `@public` to expose an export outside it (`defaultImportability: "package"`) | The recommended default: the boundary is visible in the file tree itself, and never needs updating as the project grows. |
-| `gradual` | Every plain directory (no `packageDirectory` set) | Nothing — every export is public until you tag it (`defaultImportability: "public"`, every other option at its default) | Adopting on an existing codebase without breaking the build on day one. |
-| `monorepo` | Each `packages/*` workspace package (`packageDirectory: ["packages/*"]`) | Everything inside a package (`defaultImportability: "package"`) — but only for *relative* reach-ins; a sibling package imported *by name* is exempt | Monorepos where the workspace package, not the directory, is the real unit of ownership. |
+| **Package-by-default** (what `init` scaffolds) | Any directory named `foo.package` (`packageDirectory: ["**/*.package"]`) | Everything inside a boundary — tag `@public` to expose an export outside it (`defaultImportability: "package"`) | The recommended default, for new *and* existing codebases: the boundary is visible in the file tree itself, never needs config updates as the project grows, and restricts nothing until you rename a directory (see the playbook below). |
+| **Annotation-driven** | Every plain directory (no `packageDirectory` set) | Nothing — every export is public until you tag it (`defaultImportability: "public"`, every other option at its default) | Enforcing your *existing* directory structure without renaming anything: seal off one export at a time with `@package` tags. |
+| **Monorepo** | Each `packages/*` workspace package (`packageDirectory: ["packages/*"]`) | Everything inside a package (`defaultImportability: "package"`) — but only for *relative* reach-ins; a sibling package imported *by name* is exempt | Monorepos where the workspace package, not the directory, is the real unit of ownership. |
 
-Scaffold any of them:
+Scaffold the first one:
 
 ```sh
-import-lint init --preset standard   # or: gradual, monorepo
+import-lint init
 ```
 
 ```
-Wrote .importlintrc.jsonc (preset: standard)
+Wrote .importlintrc.jsonc
 ```
 
-## Playbook: `standard`
+For the other two, start from the same generated file and edit the two
+options — each playbook below shows the exact distinguishing config.
+
+## Playbook: package-by-default
 
 Convention: any directory named `foo.package`, anywhere in the project, is a
 boundary — `src/auth.package/`, `src/billing.package/reporting/` (nested
 depth doesn't matter, only the boundary directory's own name does). The
-distinguishing config:
+distinguishing config (exactly what `import-lint init` scaffolds):
 
 ```jsonc
 "defaultImportability": "package",
@@ -52,7 +56,7 @@ Because the boundary is named, not located, this scales with the project
 with zero config edits: create `src/whatever.package/`, and it's
 automatically a boundary. `tutorial.md` walks through creating one boundary,
 hitting a real violation, and fixing it three ways — that walkthrough *is*
-this preset's day-to-day workflow.
+this setup's day-to-day workflow.
 
 It's also safe to adopt incrementally on an existing codebase: files outside
 every `*.package` directory all belong to one project-root package, so with no
@@ -73,15 +77,17 @@ project (swap into `packageDirectory` instead of `["**/*.package"]`):
   directory's project-relative path, not just its basename, so this only
   matches directories that are literally one level under `src/packages/`.
 
-## Playbook: `gradual`
+## Playbook: annotation-driven
 
-For an existing codebase, flipping `defaultImportability` straight to
-`"package"` (or scaffolding `standard`) would flag every unannotated export
-project-wide on day one — usually hundreds of diagnostics, and no way to
-land the tool without a mass-annotation PR first. `gradual` avoids that:
-every option is at its default (`defaultImportability: "public"`, no
-`packageDirectory`), so installing it is a no-op — nothing is restricted
-until you say so.
+Maybe you want to enforce the directory structure you already have — no
+`*.package` renames — and the boundaries you care about don't share a naming
+pattern or a fixed location. Flipping `defaultImportability` to `"package"`
+with every plain directory as a boundary would flag every cross-directory
+import project-wide on day one — usually hundreds of diagnostics, and no way
+to land the tool without a mass-annotation PR first. The annotation-driven
+setup avoids that: every option is at its default
+(`defaultImportability: "public"`, no `packageDirectory`), so installing it
+is a no-op — nothing is restricted until you say so.
 
 ```jsonc
 // distinguishing config: none. Every option is the built-in default.
@@ -94,12 +100,15 @@ until you say so.
 }
 ```
 
+To get here from the `init`-generated file: change `defaultImportability` to
+`"public"` and delete the `packageDirectory` line (or just write the config
+above).
+
 The phasing strategy has four steps, and you can stop after any of them and
 resume later — nothing forces you to finish in one pass.
 
-**1. Install at all-defaults.** `import-lint init --preset gradual` (or the
-config above), commit it, run `import-lint` in CI (see step 3) if you like —
-with nothing tagged yet, it's clean:
+**1. Install at all-defaults.** Commit the config above, run `import-lint`
+in CI (see step 3) if you like — with nothing tagged yet, it's clean:
 
 ```sh
 import-lint . --format github
@@ -179,17 +188,19 @@ immediately, instead of silently regressing until the next manual audit.
 convenient — a refactor that touches it, a bug caused by an unintended
 cross-boundary dependency, or just working top-down through the most
 leaky-looking parts of the tree first. There's no "finish line" enforced by
-the tool; `gradual`'s point is that partial coverage is a fully valid, fully
-enforced state; you're never running with anything less than everything
+the tool; the point of this setup is that partial coverage is a fully valid,
+fully enforced state; you're never running with anything less than everything
 you've tagged so far. Once most of the codebase is tagged, consider
 switching `defaultImportability` to `"package"` — the recommended end state,
-converting to the `standard` preset's default-restrictive posture — so newly
-added files are covered automatically instead of needing an explicit tag.
+converting to the package-by-default posture that `import-lint init`
+scaffolds — so newly added files are covered automatically instead of
+needing an explicit tag.
 
-## Playbook: `monorepo`
+## Playbook: monorepo
 
 Boundaries are workspace packages under `packages/*`, not directories in
-general — the distinguishing config:
+general — the distinguishing config (from the `init`-generated file, replace
+`packageDirectory`'s value):
 
 ```jsonc
 "defaultImportability": "package",

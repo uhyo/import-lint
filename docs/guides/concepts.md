@@ -171,10 +171,10 @@ src/receipt.ts
 ```
 
 `defaultImportability: "package"` is what makes tagging *optional-by-default,
-restrictive-by-default* — the recommended setting, and what the `standard`
-preset in [`adoption.md`](./adoption.md) uses. The built-in default is
-`"public"`, matching `eslint-plugin-import-access` — the gradual, opt-in mode
-for adopting on an existing codebase.
+restrictive-by-default* — the recommended setting, and what `import-lint init`
+scaffolds (see [`adoption.md`](./adoption.md)). The built-in default is
+`"public"`, matching `eslint-plugin-import-access` — the annotation-driven,
+opt-in mode for enforcing an existing directory structure one tag at a time.
 
 ## Package directory
 
@@ -190,8 +190,9 @@ distinction actually matters).
 Each pattern is matched against both a candidate directory's **basename**
 and its **project-relative path**, so a pattern like `"**/*.package"` matches
 by name regardless of where the directory lives. This is the `*.package`
-naming convention the `standard` preset (see [`adoption.md`](./adoption.md))
-is built on: name any directory that should be a boundary `foo.package`.
+naming convention the `import-lint init` config (see
+[`adoption.md`](./adoption.md)) is built on: name any directory that should
+be a boundary `foo.package`.
 
 ```
 src/
@@ -480,5 +481,5 @@ This same mechanic is the core of monorepo-style boundaries: a **name-based**
 import of a sibling workspace package (`import { x } from "@proj/bar"`)
 resolves through `node_modules` and is external, while a **relative**
 reach-in across the same two packages (`import { x } from "../../bar/src/internal"`)
-is internal and fully checked. See the `monorepo` preset in
+is internal and fully checked. See the monorepo playbook in
 [`adoption.md`](./adoption.md) for a worked example.

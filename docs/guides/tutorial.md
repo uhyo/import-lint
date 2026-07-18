@@ -24,20 +24,19 @@ into it:
 mkdir import-lint-tutorial && cd import-lint-tutorial
 ```
 
-Scaffold the config with the `standard` preset — the recommended
-package-by-default setup, built on the `*.package` naming convention:
+Scaffold the config — the recommended package-by-default setup, built on the
+`*.package` naming convention:
 
 ```sh
-npx @import-lint/cli init --preset standard
+npx @import-lint/cli init
 ```
 
 ```
-Wrote .importlintrc.jsonc (preset: standard)
+Wrote .importlintrc.jsonc
 ```
 
-(Run `init` with no flags for an interactive picker instead.) The generated
-file is fully commented — every option annotated in place. The two options
-that drive this walkthrough:
+The generated file is fully commented — every option annotated in place. The
+two options that drive this walkthrough:
 
 ```jsonc
 // Convention: any directory named "foo.package" is an encapsulation boundary.
@@ -230,6 +229,6 @@ live inside the boundary.
 - [`concepts.md`](./concepts.md) — the full mental model: package
   directories, both loopholes and their cascade behavior, re-export
   semantics, and what counts as external vs. internal.
-- [`adoption.md`](./adoption.md) — choosing a preset (`standard`, `gradual`,
-  `monorepo`) for a real project, and a phased rollout strategy for
-  retrofitting an existing codebase.
+- [`adoption.md`](./adoption.md) — choosing a starting configuration
+  (package-by-default, annotation-driven, monorepo) for a real project, and a
+  phased rollout strategy for retrofitting an existing codebase.

@@ -29,7 +29,7 @@ The package is named `@import-lint/cli`, but the installed command is still
 ## Quickstart
 
 ```sh
-# Scaffold a .importlintrc.jsonc, interactively or via --preset.
+# Scaffold a .importlintrc.jsonc.
 npx import-lint init
 
 # Lint the current directory (or your config's `include` roots).

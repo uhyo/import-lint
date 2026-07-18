@@ -19,7 +19,6 @@ use import_lint_cli::runner::RunnerOptions;
 use import_lint_cli::setup;
 use import_lint_cli::source_type::{SUPPORTED_EXTENSIONS_MESSAGE, source_type_for_path};
 use import_lint_cli::watch::{CycleOutcome, WatchSession, WatchSessionOptions, watch_loop};
-use init::Preset;
 use oxc_allocator::Allocator;
 use oxc_parser::Parser as OxcParser;
 use oxc_str::CompactStr;
@@ -106,9 +105,6 @@ enum Command {
     /// Scaffold a `.importlintrc.jsonc` into the current directory, which
     /// thereby becomes the project root (M9, `docs/PLAN-init.md`).
     Init {
-        /// Preset to scaffold. Omit for an interactive picker (requires a TTY).
-        #[arg(long, value_enum)]
-        preset: Option<Preset>,
         /// Overwrite an existing `.importlintrc.jsonc`/`.importlintrc.json` in
         /// the current directory.
         #[arg(long)]
@@ -123,7 +119,7 @@ fn main() -> ExitCode {
         Some(Command::Inspect { file }) => inspect(&file),
         Some(Command::Graph { paths, tsconfig }) => graph(paths, tsconfig),
         Some(Command::Lsp) => lsp_command(),
-        Some(Command::Init { preset, force }) => init_command(preset, force),
+        Some(Command::Init { force }) => init_command(force),
         None if cli.watch || cli.watch_poll.is_some() => watch_command(cli),
         None => lint(cli),
     }
@@ -290,11 +286,10 @@ fn lsp_command() -> ExitCode {
 }
 
 /// The `init` subcommand (M9, `docs/PLAN-init.md` D-I1): scaffold a
-/// `.importlintrc.jsonc` into the current directory. The TTY gate lives here
-/// (D-I5): interactive preset selection only happens when `--preset` is absent
-/// and both stdin and stderr are TTYs; otherwise a missing `--preset` is a usage
-/// error (exit 2) rather than a silent default, matching CI/script use.
-fn init_command(preset: Option<Preset>, force: bool) -> ExitCode {
+/// `.importlintrc.jsonc` into the current directory. Fully non-interactive —
+/// there is exactly one template, so this works the same in a terminal, a
+/// script, or CI.
+fn init_command(force: bool) -> ExitCode {
     let cwd = match std::env::current_dir() {
         Ok(dir) => dir,
         Err(err) => {
@@ -303,14 +298,7 @@ fn init_command(preset: Option<Preset>, force: bool) -> ExitCode {
         }
     };
 
-    if preset.is_none() && !(io::stdin().is_terminal() && io::stderr().is_terminal()) {
-        eprintln!(
-            "import-lint: not running in a terminal; pass --preset <name> (standard, gradual, monorepo)"
-        );
-        return ExitCode::from(2);
-    }
-
-    match init::run_init(&cwd, preset, force) {
+    match init::run_init(&cwd, force) {
         Ok(()) => ExitCode::SUCCESS,
         Err(err) => {
             eprintln!("import-lint: {err}");

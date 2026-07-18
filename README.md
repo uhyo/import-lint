@@ -126,7 +126,7 @@ cargo install --path crates/cli --locked
 ```sh
 # Installed via npm? Prefix these with npx, e.g. `npx import-lint`.
 
-# Scaffold a .importlintrc.jsonc, interactively or via --preset.
+# Scaffold a .importlintrc.jsonc.
 import-lint init
 
 # Lint the current directory (or your config's `include` roots).
@@ -139,12 +139,11 @@ import-lint src lib
 import-lint --format json
 ```
 
-`import-lint init` scaffolds a fully commented `.importlintrc.jsonc` from one
-of three presets; its default, `standard`, is the recommended package-by-default
-setup shown above. Default configuration is used when no config file is present. See
-[Config file](#config-file) below, and the
+`import-lint init` scaffolds a fully commented `.importlintrc.jsonc` with the
+recommended package-by-default setup shown above. Default configuration is used
+when no config file is present. See [Config file](#config-file) below, and the
 [Adoption guide](https://github.com/uhyo/import-lint/blob/master/docs/guides/adoption.md)
-for which preset fits your project and how to roll it out.
+for how to roll it out.
 
 ### Guides
 
@@ -158,8 +157,8 @@ has three short guides:
   a ~10-minute walkthrough: create a boundary, hit a violation, fix it three
   different ways.
 - [**Adoption**](https://github.com/uhyo/import-lint/blob/master/docs/guides/adoption.md) —
-  choosing a preset and rolling it out, including a phased strategy for an
-  existing codebase.
+  choosing a starting configuration and rolling it out, including a phased
+  strategy for an existing codebase.
 
 ## CLI flags
 
@@ -179,7 +178,7 @@ import-lint [paths...]
 | `--watch` | Watch mode: re-lint on file changes — see [Watch mode](#watch-mode). | off |
 | `--watch-poll [ms]` | Watch mode using a polling watcher. Implies `--watch`. | off |
 
-`import-lint init [--preset <name>] [--force]` scaffolds `.importlintrc.jsonc`
+`import-lint init [--force]` scaffolds `.importlintrc.jsonc`
 into the current directory. Two debug
 subcommands are also available (not part of the stable output contract):
 `import-lint inspect <file>` dumps one file's extracted module info as JSON;
@@ -191,14 +190,16 @@ config file.
 
 ## Config file
 
-Run `import-lint init` to scaffold one instead of hand-writing it: interactively
-(a numbered picker, if run in a terminal) or non-interactively via
-`--preset <name>`. Three presets are available:
-
-- `standard` — the recommended default: exports are package-private unless tagged `@public`, with directories
-named `foo.package` as the encapsulation boundaries
-- `gradual` — the opposite, annotation-driven mode: exports stay public until tagged `@package`; for adopting on an existing codebase
-- `monorepo` — boundaries at `packages/*`: no relative reach-ins across workspace packages.
+Run `import-lint init` to scaffold one instead of hand-writing it. The
+generated config is the recommended package-by-default setup: exports are
+package-private unless tagged `@public`, with directories named `foo.package`
+as the encapsulation boundaries. Directories you haven't renamed all share one
+project-root package and import freely from each other, so the same config
+suits gradual adoption on an existing codebase — rename one directory at a
+time. Other setups (annotation-driven adoption, boundaries at a monorepo's
+`packages/*`) are a small edit away; the
+[Adoption guide](https://github.com/uhyo/import-lint/blob/master/docs/guides/adoption.md)
+walks through them.
 
 ImportLint looks for `.importlintrc.jsonc` (or `.importlintrc.json`, if no `.jsonc`
 file exists in the same directory) starting at the current directory and walking
@@ -244,7 +245,7 @@ explains each with a worked example.
 
       // Access level assumed for an export with no recognized JSDoc access tag.
       // "public" | "package" | "private". The built-in default is "public";
-      // "package" is the recommended setting, and what the `standard` preset uses.
+      // "package" is the recommended setting, and what `import-lint init` scaffolds.
       "defaultImportability": "public",
 
       // How a bare specifier matching the importer's own package name is

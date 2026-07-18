@@ -1,5 +1,16 @@
 # ImportLint — `init` Scaffolding Plan (M9)
 
+> **Status update (2026-07-18, after v0.1.3):** presets were removed. `init`
+> now always writes the one template that was the `standard` preset, with no
+> `--preset` flag and no interactive picker — the `packageDirectory`
+> project-root fallback makes that config suit gradual adoption too, so the
+> `gradual` and `monorepo` presets became config-edit recipes in
+> `docs/guides/adoption.md` instead. D-I2 (scaffold-time-only), D-I3/D-I4
+> (commented `.jsonc` from a static, round-trip-tested string), D-I6
+> (overwrite safety), and D-I7 (stderr-only) still stand; the preset-selection
+> parts of D-I2 and all of D-I5 are superseded. The rest of this document is
+> kept as designed for the historical record.
+
 Everything planned so far has shipped: the core linter (M0–M7), npm distribution
 (N1–N3), and the LSP server + VS Code extension (M8/L1–L4). Earlier plans are
 archived at [`docs/PLAN-v1.md`](./PLAN-v1.md), [`docs/PLAN-npm.md`](./PLAN-npm.md),

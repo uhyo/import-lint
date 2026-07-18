@@ -67,23 +67,21 @@ For every release after v0.1.0:
    `Cargo.toml` fails the release rather than shipping a skewed npm package.
 2. Update `README.md`'s Roadmap/changelog if applicable.
 3. If the config file shape changed, check `README.md`'s `## Config file`
-   example against `crates/cli/src/init.rs`'s `gradual` template — the two are
-   meant to read as the same text (docs/PLAN-init.md R-I4); the `init` round-trip
+   example against `crates/cli/src/init.rs`'s `TEMPLATE` — the two are meant
+   to read as the same text (docs/PLAN-init.md R-I4); the `init` round-trip
    unit tests catch schema drift but not prose drift between them. This
-   prose-sync now extends to `docs/guides/`: `tutorial.md`'s hand-written
-   config (a trimmed `standard`-preset equivalent) and `adoption.md`'s
-   preset-comparison and playbook config snippets should still read as the
-   same options/defaults as their corresponding `crates/cli/src/init.rs`
-   template (docs/PLAN.md §3.6) — a schema change that isn't reflected in the
+   prose-sync now extends to `docs/guides/`: `tutorial.md`'s config excerpt
+   (a trimmed equivalent of the template) and `adoption.md`'s
+   setup-comparison and playbook config snippets should still read as the
+   same options/defaults as `crates/cli/src/init.rs`'s template
+   (docs/PLAN.md §3.6) — a schema change that isn't reflected in the
    guides is a doc bug even though nothing in CI catches it.
-4. If this is the first release that ships `init` presets (i.e. `import-lint
-   init --preset <name>` becomes usable via `npx @import-lint/cli@latest`,
-   not just the local workspace build): update `docs/guides/tutorial.md`'s
-   Setup section to scaffold with `npx @import-lint/cli init --preset
-   standard` instead of hand-writing the config file, and drop
-   `docs/guides/adoption.md`'s "copy the config blocks below by hand"
-   fallback note — both currently exist only because `init` presets (M9)
-   postdate the v0.1.2 build the guides were written and verified against.
+4. If this is the first release since `init --preset` was removed (after
+   v0.1.3; `init` now always writes the one template, non-interactively):
+   note the CLI-breaking change in the release notes — the v0.1.3 npm build
+   is the last one that accepts (and, in scripts/CI, requires) `--preset`,
+   and the guides' plain `npx @import-lint/cli init` commands only work
+   against this release or later.
 5. Follow the runbook above, substituting the new version for `v0.1.0` in the git
    tag.
 

@@ -1,9 +1,6 @@
 //! `import-lint init` end-to-end tests (M9, `docs/PLAN-init.md` §5, milestone I1):
 //! spawn the real binary (`env!("CARGO_BIN_EXE_import-lint")`) against a fresh
-//! `TempDir` fixture per test, mirroring `tests/cli.rs`'s pattern. The interactive
-//! (TTY) picker is deliberately not exercised here — piped stdin/stderr never
-//! pass the TTY gate, so that path is covered by `crates/cli/src/init.rs`'s
-//! `choose_preset` unit tests instead (PLAN-init.md §5).
+//! `TempDir` fixture per test, mirroring `tests/cli.rs`'s pattern.
 
 use std::fs;
 use std::path::Path;
@@ -38,39 +35,31 @@ fn run_in(dir: &Path, args: &[&str]) -> Output {
     }
 }
 
-/// `import-lint init --preset <preset>` writes `.importlintrc.jsonc` and prints
-/// nothing to stdout (D-I7); a follow-up `import-lint` run against a trivial
-/// fixture then exits clean using the generated config — the real exit criterion
-/// (PLAN-init.md milestone I1).
+/// `import-lint init` writes `.importlintrc.jsonc` and prints nothing to
+/// stdout (D-I7); a follow-up `import-lint` run against a trivial fixture then
+/// exits clean using the generated config — the real exit criterion
+/// (PLAN-init.md milestone I1). `Command::output()` never hands the child a
+/// TTY, so this also proves `init` is fully non-interactive.
 #[test]
-fn each_preset_scaffolds_a_config_that_lints_clean() {
-    for preset in ["standard", "gradual", "monorepo"] {
-        let dir = TempDir::new().unwrap();
-        write(dir.path(), "src/a.ts", "export const a = 1;\n");
+fn init_scaffolds_a_config_that_lints_clean() {
+    let dir = TempDir::new().unwrap();
+    write(dir.path(), "src/a.ts", "export const a = 1;\n");
 
-        let init_out = run_in(dir.path(), &["init", "--preset", preset]);
-        assert!(
-            init_out.status.success(),
-            "preset {preset}: stderr: {}",
-            init_out.stderr
-        );
-        assert_eq!(
-            init_out.stdout, "",
-            "preset {preset}: stdout should be empty"
-        );
-        assert!(
-            dir.path().join(".importlintrc.jsonc").is_file(),
-            "preset {preset}: config file should exist"
-        );
+    let init_out = run_in(dir.path(), &["init"]);
+    assert!(init_out.status.success(), "stderr: {}", init_out.stderr);
+    assert_eq!(init_out.stdout, "", "stdout should be empty");
+    assert!(
+        dir.path().join(".importlintrc.jsonc").is_file(),
+        "config file should exist"
+    );
 
-        let lint_out = run_in(dir.path(), &[]);
-        assert!(
-            lint_out.status.success(),
-            "preset {preset}: lint should succeed using the generated config, stderr: {}",
-            lint_out.stderr
-        );
-        assert_eq!(lint_out.stdout, "");
-    }
+    let lint_out = run_in(dir.path(), &[]);
+    assert!(
+        lint_out.status.success(),
+        "lint should succeed using the generated config, stderr: {}",
+        lint_out.stderr
+    );
+    assert_eq!(lint_out.stdout, "");
 }
 
 #[test]
@@ -78,7 +67,7 @@ fn refuses_to_overwrite_an_existing_jsonc_config_without_force() {
     let dir = TempDir::new().unwrap();
     write(dir.path(), ".importlintrc.jsonc", "{}");
 
-    let out = run_in(dir.path(), &["init", "--preset", "standard"]);
+    let out = run_in(dir.path(), &["init"]);
 
     assert_eq!(out.status.code(), Some(2));
     assert_eq!(out.stdout, "");
@@ -99,7 +88,7 @@ fn refuses_to_overwrite_an_existing_json_config_without_force() {
     let dir = TempDir::new().unwrap();
     write(dir.path(), ".importlintrc.json", "{}");
 
-    let out = run_in(dir.path(), &["init", "--preset", "standard"]);
+    let out = run_in(dir.path(), &["init"]);
 
     assert_eq!(out.status.code(), Some(2));
     assert!(
@@ -115,11 +104,14 @@ fn force_overwrites_an_existing_jsonc_config() {
     let dir = TempDir::new().unwrap();
     write(dir.path(), ".importlintrc.jsonc", "{ /* old */ }");
 
-    let out = run_in(dir.path(), &["init", "--preset", "gradual", "--force"]);
+    let out = run_in(dir.path(), &["init", "--force"]);
 
     assert!(out.status.success(), "stderr: {}", out.stderr);
     let contents = fs::read_to_string(dir.path().join(".importlintrc.jsonc")).unwrap();
-    assert!(contents.contains("Preset: gradual"), "contents: {contents}");
+    assert!(
+        contents.contains("\"packageDirectory\": [\"**/*.package\"]"),
+        "contents: {contents}"
+    );
 }
 
 #[test]
@@ -127,7 +119,7 @@ fn force_with_existing_json_notes_that_jsonc_shadows_it() {
     let dir = TempDir::new().unwrap();
     write(dir.path(), ".importlintrc.json", "{}");
 
-    let out = run_in(dir.path(), &["init", "--preset", "standard", "--force"]);
+    let out = run_in(dir.path(), &["init", "--force"]);
 
     assert!(out.status.success(), "stderr: {}", out.stderr);
     assert!(dir.path().join(".importlintrc.jsonc").is_file());
@@ -142,32 +134,20 @@ fn ancestor_config_gets_a_note_that_the_new_file_takes_over() {
     let nested = dir.path().join("nested");
     fs::create_dir_all(&nested).unwrap();
 
-    let out = run_in(&nested, &["init", "--preset", "standard"]);
+    let out = run_in(&nested, &["init"]);
 
     assert!(out.status.success(), "stderr: {}", out.stderr);
     assert!(nested.join(".importlintrc.jsonc").is_file());
     assert!(out.stderr.contains("takes over"), "stderr: {}", out.stderr);
 }
 
+/// `--preset` was removed (init always emits the one template); passing it is
+/// now a clap usage error and must not write anything.
 #[test]
-fn non_tty_without_preset_exits_2_and_mentions_the_flag() {
+fn removed_preset_flag_exits_2() {
     let dir = TempDir::new().unwrap();
 
-    // No `--preset`, and `Command::output()` never hands the child a TTY for
-    // stdin/stdout/stderr, so this always fails the TTY gate (D-I5).
-    let out = run_in(dir.path(), &["init"]);
-
-    assert_eq!(out.status.code(), Some(2));
-    assert_eq!(out.stdout, "");
-    assert!(out.stderr.contains("--preset"), "stderr: {}", out.stderr);
-    assert!(!dir.path().join(".importlintrc.jsonc").exists());
-}
-
-#[test]
-fn invalid_preset_value_exits_2() {
-    let dir = TempDir::new().unwrap();
-
-    let out = run_in(dir.path(), &["init", "--preset", "bogus"]);
+    let out = run_in(dir.path(), &["init", "--preset", "standard"]);
 
     assert_eq!(out.status.code(), Some(2));
     assert!(!dir.path().join(".importlintrc.jsonc").exists());
