@@ -3,12 +3,11 @@
 [![crates.io](https://img.shields.io/crates/v/import-lint.svg)](https://crates.io/crates/import-lint)
 [![npm](https://img.shields.io/npm/v/%40import-lint%2Fcli.svg)](https://www.npmjs.com/package/@import-lint/cli)
 
-ImportLint enforces directory-level encapsulation in TypeScript and
+**ImportLint** enforces directory-level encapsulation in TypeScript and
 JavaScript: a directory is a "package", and its exports are importable
 only from files inside it (or nested below it) until you tag one
 `@public` in its JSDoc — ImportLint flags every import that breaks the
-rule. It's a small, fast Rust CLI, so it runs without a TypeScript
-compiler or ESLint, and stays fast on large codebases.
+rule. It's a small, fast Rust CLI, so it stays fast on large codebases.
 
 **Already migrating from `eslint-plugin-import-access`?** Jump straight to
 [Migration](#migration-from-eslint-plugin-import-access) — this README
@@ -25,10 +24,7 @@ between these five files, but not the rest of the codebase."
 ImportLint adds that directory-level layer on top of the file: each
 directory (or a boundary you name explicitly — see
 [`packageDirectory`](#config-file) below) is a "package" whose exports
-stay inside it unless tagged `@public`; `@private` narrows an export
-further, to its own file. The check needs neither a TypeScript program
-nor ESLint and runs in milliseconds, so nothing stops you from enforcing
-it on every keystroke or in CI.
+stay inside it unless tagged `@public`.
 
 ## Example
 
@@ -144,11 +140,7 @@ import-lint --format json
 
 `import-lint init` scaffolds a fully commented `.importlintrc.jsonc` from one
 of three presets; its default, `standard`, is the recommended package-by-default
-setup shown above. With no config file, ImportLint lints `.` with the
-`package-access` rule at `error` severity and every option at its built-in
-default — identical to `eslint-plugin-import-access`'s defaults, where exports
-stay public until tagged `@package` (see
-[Migration](#migration-from-eslint-plugin-import-access)). See
+setup shown above. Default configuration is used when no config file is present. See
 [Config file](#config-file) below, and the
 [Adoption guide](https://github.com/uhyo/import-lint/blob/master/docs/guides/adoption.md)
 for which preset fits your project and how to roll it out.
@@ -187,27 +179,28 @@ import-lint [paths...]
 | `--watch-poll [ms]` | Watch mode using a polling watcher. Implies `--watch`. | off |
 
 `import-lint init [--preset <name>] [--force]` scaffolds `.importlintrc.jsonc`
-into the current directory — see [Config file](#config-file). Two debug
+into the current directory. Two debug
 subcommands are also available (not part of the stable output contract):
 `import-lint inspect <file>` dumps one file's extracted module info as JSON;
 `import-lint graph [paths...]` dumps the discovery+resolution graph as JSON.
 
 Flag resolution order is **CLI flag > config file > built-in default**. Rule options
 (`indexLoophole`, `defaultImportability`, etc.) are configured only through the
-config file — see below.
+config file.
 
 ## Config file
 
 Run `import-lint init` to scaffold one instead of hand-writing it: interactively
 (a numbered picker, if run in a terminal) or non-interactively via
-`--preset <name>`. Three presets are available — `standard` (the recommended
-default: exports are package-private unless tagged `@public`, with directories
-named `foo.package` as the encapsulation boundaries), `gradual` (the opposite,
-annotation-driven mode: exports stay public
-until tagged `@package`/`@private`; for adopting on an existing codebase), and
-`monorepo` (boundaries at `packages/*`: no relative reach-ins across workspace
-packages). A preset only picks starting values for the `package-access` options below — the
-generated file is plain, fully editable config with no reference back to the preset.
+`--preset <name>`. Three presets are available:
+
+- `standard` — the recommended default: exports are package-private unless tagged `@public`, with directories
+named `foo.package` as the encapsulation boundaries
+- `gradual` — the opposite, annotation-driven mode: exports stay public until tagged `@package`; for adopting on an existing codebase
+- `monorepo` — boundaries at `packages/*`: no relative reach-ins across workspace
+  packages. A preset only picks starting values for the `package-access` options below — the
+  generated file is plain, fully editable config with no reference back to the preset.
+
 See the [Adoption guide](https://github.com/uhyo/import-lint/blob/master/docs/guides/adoption.md)
 for a comparison and a rollout playbook per preset.
 
@@ -361,21 +354,6 @@ A status line follows every re-render:
 ✖ 1 problem (1 error, 0 warnings) — rechecked 42 files in 8 ms (watching, Ctrl-C to exit)
 ```
 
-**What triggers a re-run:**
-
-- Editing a file already picked up by the lint (a `.ts`/`.tsx`/`.js`/... file under
-  an `include` root) re-parses just that file and re-checks only the files whose
-  diagnostics could actually be affected: the file itself, and — only if the edit
-  changed what it exports — its importers, followed transitively through
-  `export * from` chains. Everything else is untouched.
-- Adding, removing, or renaming any file, or editing any `package.json`, re-walks
-  the project and rebuilds the resolver from scratch (a new or deleted file can
-  shadow a specifier resolution elsewhere).
-- Editing the config file (`.importlintrc.jsonc`/`.json`) or the `tsconfig.json`
-  reloads it and rebuilds everything. **If the edited config is invalid, the
-  previous config keeps running** (the error is reported, but watch mode never
-  exits on a bad config edit) — fix it and save again.
-
 **`--watch-poll [interval-ms]`** (default interval `500`) uses a polling watcher
 instead of the platform-recommended one (inotify on Linux). Use this:
 
@@ -393,10 +371,9 @@ restarting `import-lint --watch` manually.
 
 ## Editor integration
 
-The [ImportLint VS Code extension](https://marketplace.visualstudio.com/items?itemName=uhyo.import-lint)
+The **[ImportLint VS Code extension](https://marketplace.visualstudio.com/items?itemName=uhyo.import-lint)**
 (`uhyo.import-lint`, also on [Open VSX](https://open-vsx.org/extension/uhyo/import-lint))
-shows violations as you type, including cross-file ones — a change in a file
-you haven't opened can surface a diagnostic in a file that imports it. It
+shows violations as you type. It
 needs no extra install beyond `npm install -D @import-lint/cli`: the
 extension finds the workspace binary automatically (`importLint.binaryPath`
 overrides this, and `PATH` is the fallback). It activates automatically when
@@ -431,9 +408,7 @@ ImportLint's `package-access` rule is a behavioral port of the plugin's
   `filenameLoophole`, `defaultImportability`, `treatSelfReferenceAs`,
   `excludeSourcePatterns`, `packageDirectory`. Copy your rule options straight into
   `rules.package-access` in `.importlintrc.jsonc` (the ESLint plugin's
-  `import-access/jsdoc` rule name became `rules.jsdoc` in early ImportLint
-  releases and is now `rules.package-access`; a config still using `rules.jsdoc`
-  fails to load with a message naming both keys).
+  `import-access/jsdoc` rule name became `rules.package-access`).
 - The `json` output format's `ruleId` is `package-access` (not
   `import-access/jsdoc`) — update any CI filter or `reviewdog` rule-ID match that
   keyed off the ESLint plugin's rule ID.
@@ -445,37 +420,16 @@ ImportLint's `package-access` rule is a behavioral port of the plugin's
   add patterns matching those directories (or `"**"`) to `packageDirectory`.
   For everyone else this only *removes* errors — it's what makes gradually
   adopting a boundary-naming convention like `["**/*.package"]` possible.
-- Same one-hop re-export semantics: only the directly-imported file's own JSDoc (or
-  its `export * from` chain) governs a re-export's importability — never a second
-  hop through what *that* file re-exports.
-- **Unresolvable imports are skipped silently**, matching the plugin's behavior
-  (which would have failed type-checking earlier via TypeScript). Pass
-  `--report-unresolved` to see them as warnings instead.
-- There's no `no-program` diagnostic — that check existed only because the plugin
-  needed a TypeScript program; ImportLint doesn't use one.
-- Same blind spots as the plugin, on purpose: `export * from` statements are
-  followed for the check, but `import * as ns` namespace access, dynamic
-  `import()`, `import x = require()`, and CommonJS `require()` are not checked.
 
 ## Performance
 
 Measured on a 16-core AMD Ryzen 7 PRO 6850U laptop running **WSL2** (treat as
 directional, not absolute — see `docs/benchmarks.md` for the full methodology,
-machine details, and reproduction commands):
+machine details, and reproduction commands).
 
-- **Cold lint: ~157 ms for 5,000 files, ~323 ms for 10,000 files** — well
-  under the `docs/PLAN-v1.md` §8 targets of 2 s / 4 s.
-- **~155x faster than the reference `eslint-plugin-import-access`** on the
-  same 5,000-file tree (157 ms vs. 24.4 s), reflecting that ImportLint parses
-  once with oxc rather than running full TypeScript-type-aware ESLint.
-- **Watch-mode single-edit cycles at 10,000 files run ~5 ms**, well under the
-  < 100 ms target — an incremental fast path (PLAN-v1.md §7) patches the module
-  graph and re-checks only the dirty subset instead of the whole project; see
-  `docs/benchmarks.md` for the design and measurements.
+This tool is **~155x faster than the reference `eslint-plugin-import-access`** on the
+same 5,000-file tree (157 ms vs. 24.4 s), reflecting that ImportLint parses
+once with oxc rather than running full TypeScript-type-aware ESLint.
 
 Reproduce with `scripts/bench.sh` (add `--compare-eslint` for the ESLint
 comparison) and `cargo bench -p import-lint-core --bench extract`.
-
-## Roadmap
-
-- v1.0 stabilization following the v0.1.0 crates.io / GitHub Releases launch.
