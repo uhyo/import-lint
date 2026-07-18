@@ -92,7 +92,9 @@ fn package_violation_pretty_output_exits_1_with_no_ansi() {
     let out = run_in(dir.path(), &[]);
 
     assert_eq!(out.status.code(), Some(1));
-    assert!(out.stdout.contains("src/consumer.ts"));
+    // Pretty output renders paths with the native separator (cf. the
+    // paths-override test below).
+    assert!(out.stdout.contains("src/consumer.ts") || out.stdout.contains("src\\consumer.ts"));
     assert!(
         out.stdout
             .contains("Cannot import a package-private export 'helper'")
