@@ -93,6 +93,10 @@ fn symlink_dir(target: &Path, link: &Path) -> std::io::Result<()> {
 
 #[cfg(windows)]
 fn symlink_dir(target: &Path, link: &Path) -> std::io::Result<()> {
+    // Windows stores the symlink target verbatim and won't resolve one whose
+    // relative target uses forward slashes (os error 123 on access), so
+    // rewrite the separators before creating the link.
+    let target = target.to_string_lossy().replace('/', "\\");
     std::os::windows::fs::symlink_dir(target, link)
 }
 
