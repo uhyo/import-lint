@@ -3,6 +3,8 @@
 [![crates.io](https://img.shields.io/crates/v/import-lint.svg)](https://crates.io/crates/import-lint)
 [![npm](https://img.shields.io/npm/v/%40import-lint%2Fcli.svg)](https://www.npmjs.com/package/@import-lint/cli)
 
+English | [日本語](./README.ja.md)
+
 **ImportLint** enforces directory-level encapsulation in TypeScript and
 JavaScript: a directory is a "package", and its exports are importable
 only from files inside it (or nested below it) until you tag one
@@ -77,8 +79,7 @@ to be used from anywhere — or move `receipt.ts` inside `cart/`, if it isn't.
 Either way, the next run is clean, with no output.
 
 Prefer opting in gradually instead? With no config file at all, nothing is
-restricted until you tag an export `@package` — the same model as
-`eslint-plugin-import-access`, and the easiest way to adopt ImportLint on an
+restricted until you tag an export `@package` — the easiest way to adopt ImportLint on an
 existing codebase.
 
 For the full mental model, see the
@@ -172,7 +173,7 @@ import-lint [paths...]
 | `--config <path>` | Explicit config file. Exits `2` if missing or invalid. | discovered by walking up from cwd |
 | `--format <pretty\|json\|github>` | Output format — see [Output formats](#output-formats). | `pretty` |
 | `--threads <n>` | Rayon thread pool size for parsing/resolving. | number of cores |
-| `--tsconfig <path>` | Path to the project's `tsconfig.json`, for resolver `paths`/`baseUrl`. Overrides the config file. | config `tsconfig`, else `<project root>/tsconfig.json` if present |
+| `--tsconfig <path>` | Path to the project's `tsconfig.json`, for resolver `paths`/`baseUrl`. Overrides the config file | config `tsconfig`, else `<project root>/tsconfig.json` if present |
 | `--report-unresolved` | Emit a warning for every import specifier that fails to resolve, instead of skipping it silently. | off |
 | `--quiet` | Suppress warning-severity output (errors only), like `eslint --quiet`. | off |
 | `--watch` | Watch mode: re-lint on file changes — see [Watch mode](#watch-mode). | off |
@@ -197,12 +198,7 @@ Run `import-lint init` to scaffold one instead of hand-writing it: interactively
 - `standard` — the recommended default: exports are package-private unless tagged `@public`, with directories
 named `foo.package` as the encapsulation boundaries
 - `gradual` — the opposite, annotation-driven mode: exports stay public until tagged `@package`; for adopting on an existing codebase
-- `monorepo` — boundaries at `packages/*`: no relative reach-ins across workspace
-  packages. A preset only picks starting values for the `package-access` options below — the
-  generated file is plain, fully editable config with no reference back to the preset.
-
-See the [Adoption guide](https://github.com/uhyo/import-lint/blob/master/docs/guides/adoption.md)
-for a comparison and a rollout playbook per preset.
+- `monorepo` — boundaries at `packages/*`: no relative reach-ins across workspace packages.
 
 ImportLint looks for `.importlintrc.jsonc` (or `.importlintrc.json`, if no `.jsonc`
 file exists in the same directory) starting at the current directory and walking
@@ -247,9 +243,8 @@ explains each with a worked example.
       "filenameLoophole": false,
 
       // Access level assumed for an export with no recognized JSDoc access tag.
-      // "public" | "package" | "private". The built-in default is "public"
-      // (matching eslint-plugin-import-access); "package" is the recommended
-      // setting, and what the `standard` preset uses.
+      // "public" | "package" | "private". The built-in default is "public";
+      // "package" is the recommended setting, and what the `standard` preset uses.
       "defaultImportability": "public",
 
       // How a bare specifier matching the importer's own package name is
