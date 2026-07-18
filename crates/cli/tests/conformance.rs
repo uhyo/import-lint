@@ -83,6 +83,19 @@ fn copy_dir_recursive(src: &Path, dst: &Path) {
     }
 }
 
+/// Create a directory symlink at `link` pointing to `target` (which may be
+/// relative to the link's own parent), on either platform. Windows separates
+/// file and directory symlinks; every use here links a directory.
+#[cfg(unix)]
+fn symlink_dir(target: &Path, link: &Path) -> std::io::Result<()> {
+    std::os::unix::fs::symlink(target, link)
+}
+
+#[cfg(windows)]
+fn symlink_dir(target: &Path, link: &Path) -> std::io::Result<()> {
+    std::os::windows::fs::symlink_dir(target, link)
+}
+
 /// Set up a fresh copy of the fixture tree plus its `node_modules` layout in a new
 /// `TempDir`. Returns the temp dir (kept alive by the caller) and the canonicalized
 /// `<tmp>/project` path.
@@ -131,7 +144,7 @@ fn setup_fixture() -> (TempDir, PathBuf) {
         // link's own location: up out of @fixture-package-workspace/, node_modules/,
         // and project/, then into packages/workspaces/<name>.
         let target = PathBuf::from("../../../packages/workspaces").join(&name);
-        std::os::unix::fs::symlink(&target, &link_path).unwrap_or_else(|err| {
+        symlink_dir(&target, &link_path).unwrap_or_else(|err| {
             panic!(
                 "symlink {} -> {}: {err}",
                 link_path.display(),

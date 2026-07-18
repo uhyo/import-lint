@@ -13,18 +13,24 @@ use tempfile::TempDir;
 /// A fixture project tree plus convenience helpers for writing files and building a
 /// [`ProjectResolver`] over it.
 struct Project {
-    dir: TempDir,
+    /// Keeps the tempdir alive for the fixture's lifetime.
+    _dir: TempDir,
+    /// The tempdir's canonicalized path. The resolver canonicalizes what it
+    /// returns, so expected `Internal(path)` values must be built from a
+    /// canonical root too — on macOS `TempDir` lives behind the
+    /// `/var` -> `/private/var` symlink, and the raw path wouldn't match.
+    root: PathBuf,
 }
 
 impl Project {
     fn new() -> Self {
-        Self {
-            dir: TempDir::new().expect("create tempdir"),
-        }
+        let dir = TempDir::new().expect("create tempdir");
+        let root = dir.path().canonicalize().expect("canonicalize tempdir");
+        Self { _dir: dir, root }
     }
 
     fn root(&self) -> &Path {
-        self.dir.path()
+        &self.root
     }
 
     fn path(&self, rel: &str) -> PathBuf {
