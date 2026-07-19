@@ -1,23 +1,14 @@
 # Tutorial: your first boundary
 
-Documents ImportLint v0.1.5.
-
 This is a hands-on, ~10-minute walkthrough: create one encapsulation
 boundary, trigger a real violation, and fix it three different ways. It
-assumes nothing about ImportLint or JSDoc access tags beyond what's
+assumes no knowledge about ImportLint or JSDoc access tags beyond what's
 explained inline — for the concepts behind each step, see
 [`concepts.md`](./concepts.md).
 
-Every command and every diagnostic below is real, pasted output from running
-the tool — not a hypothetical (absolute paths are shown project-relative).
-Commands are shown as `npx @import-lint/cli` (the way you'd run them via
-npm, with no global install); they were verified against the identical
-workspace build of the CLI.
-
 ## Setup
 
-You need Node.js (for `npx`) or a downloaded `import-lint` binary — nothing
-else. No `package.json`, no `npm install`. Make an empty directory and step
+You need Node.js (for `npx`) or a downloaded `import-lint` binary. Make an empty directory and step
 into it:
 
 ```sh
@@ -107,8 +98,8 @@ src/server.ts
 
 Exit code `1`. `issueToken` has no JSDoc tag, so it defaults to
 `"package"` importability (that's what `defaultImportability` set); `token.ts`
-lives inside the `auth.package` boundary, and `server.ts` doesn't — so the
-import is a violation. This is the thing ImportLint exists to catch: a
+lives inside the `auth.package` boundary, and `server.ts` doesn't, which marks the
+import as a violation. This is the thing ImportLint exists to catch: a
 function that was only ever meant for `auth.package`'s own internals, used
 somewhere it shouldn't be.
 
@@ -147,7 +138,9 @@ src/server.ts
 
 Instead of tagging the function itself, add a bare re-export at the
 boundary's own `index.ts`, and import through it instead of reaching
-straight into `token.ts`. `src/auth.package/index.ts`:
+straight into `token.ts`.
+
+`src/auth.package/index.ts`:
 
 ```ts
 export { issueToken } from "./token";
@@ -169,9 +162,8 @@ No output, exit code `0`. This works because of the *index loophole*
 (`concepts.md`'s [Index loophole](./concepts.md#index-loophole) section): a
 bare re-export in a boundary's `index.ts` promotes that export to the
 boundary's parent package — `src/`, the same directory `server.ts` is in.
-Unlike Fix 1, `issueToken` is still inaccessible to anything two levels
-away; only `src/`'s siblings and descendants that go through the index gain
-access.
+Unlike Fix 1, `issueToken` is not *fully* public — it is still inaccessible to anything two levels
+away.
 
 ### Fix 3: move the importer inside the boundary
 
@@ -199,30 +191,15 @@ npx @import-lint/cli .
 No output, exit code `0`. `server.ts` is now in the same package as
 `token.ts`, so no tag or re-export is needed at all.
 
-## End green
+## Conclusion
 
-For the rest of this tutorial (and to leave your directory in the state the
-commands above assumed), settle on **Fix 1**: `server.ts` back in `src/`,
-importing the deep path directly, and `issueToken` tagged `@public`.
-
-```
-.
-├── .importlintrc.jsonc
-└── src
-    ├── auth.package
-    │   └── token.ts   ── issueToken, tagged @public
-    └── server.ts
-```
-
-```sh
-npx @import-lint/cli .
-```
-
-Clean run, exit code `0`. You've created a boundary, hit a real violation,
+In this tutorial, you've created a boundary, hit a real violation,
 and seen three independent, valid ways to resolve it — which one is
 "correct" depends entirely on whether the export was meant to be public API,
 a curated re-export surface, or purely internal to code that should just
 live inside the boundary.
+
+However, `@public` is rarely the right choice; it makes the export available *everywhere*, which is usually not what you want. The other two fixes are more common: either re-export it through the boundary's `index.ts` so that the boundary can control its public API, or move the importer into the boundary so it can use the export without exposing it to the outside world.
 
 ## Where next
 
