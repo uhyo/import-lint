@@ -1,7 +1,5 @@
 # Concepts
 
-Documents ImportLint v0.1.5.
-
 ImportLint enforces directory-level encapsulation for TypeScript and
 JavaScript: a directory is a "package", and in the recommended setup its
 exports are importable only from inside it until tagged `@public` in their
@@ -18,36 +16,32 @@ If you'd rather learn by doing first, see [`tutorial.md`](./tutorial.md). If
 you're choosing how to roll ImportLint out to a real project, see
 [`adoption.md`](./adoption.md).
 
-Every example below was actually run against the workspace binary; the code
-shown is the exact file content that produced the diagnostic underneath it
-(no filename comment baked in — where a snippet's file matters, it's named
-in the sentence right above the code block).
-
 ## Package
 
 A **package**, in ImportLint's vocabulary, has nothing to do with an npm
-package — it's the unit of encapsulation the tool checks. By default, a
-file's package is its own containing directory *together with every
-directory nested inside it, at any depth*: a package-scoped export is
-importable from its own directory or from any subdirectory of that
-directory, but not from a parent directory or a sibling directory. The
-relationship only runs one way — inward and downward, never outward and
-up.
+package — it's the unit of encapsulation the tool checks. Packages-scoped
+(or *package-private*) exports are importable only from inside the same package. Packages can be nested — child packages can import from parent packages, but
+not the other way around.
+
+By default, a file's package is its own containing directory: a package-scoped
+export is importable from its own directory or from any subdirectory of that
+directory, but not from a parent directory or a sibling directory.
+
+**Example 1:**
 
 ```
 src/
 ├── cart/
-│   ├── total.ts        ── exports computeTotal (untagged)
+│   ├── total.ts        ── exports computeTotal
 │   ├── checkout.ts     ── same directory: can import computeTotal
 │   └── promo/
 │       └── discount.ts  ── nested subdirectory: can ALSO import computeTotal
 └── receipt.ts            ── parent directory: cannot
 ```
 
-Config — the recommended package-by-default setup:
-`"defaultImportability": "package"`. With it, no JSDoc tag is needed for an
-export to be package-scoped (an explicit `/** @package */` tag means the same
-thing in any configuration — see [Importability](#importability) below).
+The recommended config setup is `"defaultImportability": "package"` — that is,
+every export is package-private unless tagged `@public`. You can still use
+`@package` tags to make an export package-private even in a `"public"`-default codebase. See [Importability](#importability) below.
 
 `src/cart/total.ts`:
 
@@ -87,15 +81,6 @@ src/receipt.ts
 ✖ 1 problem (1 error, 0 warnings)
 ```
 
-The asymmetry matters — and `discount.ts`'s own `discountedTotal` export
-shows it: `checkout.ts` (in `cart/` itself, an *ancestor* of `discount.ts`'s
-directory) can **not** import it — only `promo/`'s own directory or
-something nested even deeper inside `promo/` can (verified: adding that
-import to `checkout.ts` gets
-`Cannot import a package-private export 'discountedTotal'`). Visibility
-flows from an ancestor directory down into its descendants, never from a
-descendant back up or sideways to a sibling.
-
 Where a file's package boundary actually sits — directory-by-default, or
 something else — is configurable; see [Package directory](#package-directory)
 below.
@@ -110,16 +95,17 @@ levels, declared with a JSDoc tag directly above the `export`:
 - `@package` — importable only from within the same package (see
   [Package](#package) above).
 - `@private` — not importable from anywhere, not even from files in the
-  same package. (The export is only usable inside its own file — verified:
-  a same-directory import of a `@private` export is rejected too.)
+  same package. Useful for test-only exports by configuring ImportLint to ignore test files.
 
 (`/** @access public */` / `@access package` / `@access private` are accepted
 as an alternate spelling of the same three tags.)
 
 An export with **no** recognized tag falls back to the `defaultImportability`
-option (`"public"` | `"package"` | `"private"`, built-in default `"public"`) —
+option (`"public"` | `"package"` | `"private"`) —
 this is the single option that decides whether an *unannotated* codebase
 starts wide open or fully closed.
+
+**Example 2:**
 
 `src/cart/total.ts`:
 
@@ -173,13 +159,12 @@ src/receipt.ts
 `defaultImportability: "package"` is what makes tagging *optional-by-default,
 restrictive-by-default* — the recommended setting, and what `import-lint init`
 scaffolds (see [`adoption.md`](./adoption.md)). The built-in default is
-`"public"`, matching `eslint-plugin-import-access` — the annotation-driven,
-opt-in mode for enforcing an existing directory structure one tag at a time.
+`"public"` for backward compatibility with `eslint-plugin-import-access`, which treated untagged exports as public.
 
 ## Package directory
 
-By default a file's package is its own directory plus everything nested
-inside it (as shown above). The `packageDirectory` option replaces that
+By default a file's package is its own directory.
+The `packageDirectory` option replaces that
 with a set of glob patterns identifying which *ancestor* directories count
 as package boundaries — every file under one of those directories, at any
 depth, is in the same package, and nothing outside is (unless a *different*
@@ -194,6 +179,8 @@ naming convention the `import-lint init` config (see
 [`adoption.md`](./adoption.md)) is built on: name any directory that should
 be a boundary `foo.package`.
 
+**Example 3:**
+
 ```
 src/
 ├── auth.package/
@@ -207,8 +194,9 @@ src/
 Config: `"packageDirectory": ["**/*.package"]`, `"defaultImportability": "package"`.
 
 `src/auth.package/session.ts` importing `sign` from `./tokens/sign` is fine —
-`tokens/` has no boundary of its own, so it inherits `auth.package/`'s.
-`src/checkout/pay.ts`, reaching in from outside:
+`tokens/` has no boundary of its own, so these two files are in the same package, `auth.package`. 
+
+On the other hand, `src/checkout/pay.ts` importing `sign` from `../auth.package/tokens/sign` is a violation — `checkout/` is outside the `auth.package` boundary, so it can't reach in to a package-private export:
 
 ```ts
 import { sign } from "../auth.package/tokens/sign";
@@ -227,25 +215,27 @@ src/checkout/pay.ts
 
 A `!`-prefixed pattern excludes a directory that would otherwise match — e.g.
 `["**", "!**/scratch"]` makes every directory a boundary except ones named
-`scratch`, whose files fall back to their *parent's* boundary instead. A file
-with **no** matching ancestor at all belongs to one project-wide package rooted
+`scratch`, whose files fall back to their *parent's* boundary instead.
+
+A file with **no** matching ancestor at all belongs to one project-wide package rooted
 at the project root: all such files import freely from each other (and from
 inside them, boundary-dwelling files can still reach root-package exports, per
-the nesting rule above), while matched boundaries stay sealed. So with
-`["**/*.package"]` on a codebase with no `*.package` directories yet, nothing
+the nesting rule above), while matched boundaries stay sealed.
+
+So with `["**/*.package"]` on a codebase with no `*.package` directories yet, nothing
 is restricted — each directory you rename adds one enforced boundary, which is
-what makes gradual adoption of the naming convention work. (This is a
-deliberate divergence from `eslint-plugin-import-access`, which treats every
-unmatched file's own directory as its package.)
+what makes gradual adoption of the naming convention work.
 
 ## Index loophole
 
 `indexLoophole` (default: **on**) treats a file named `index.{js,ts,jsx,tsx,mjs,cjs,mts,cts}`
 (but not `index.d.ts`) as if its parent directory were the exporting file,
 for package-boundary purposes. Concretely: an export that reaches the
-outside world only via a **bare** (untagged) re-export in a boundary's
+outside world only via a re-export in a boundary's
 `index.ts` gets promoted one level out — to the boundary's *parent's*
 package — instead of staying trapped inside.
+
+**Example 4:**
 
 ```
 src/
@@ -266,13 +256,6 @@ belonging to `auth.package`'s *parent* directory, `src/`, the same package
 $ import-lint .
 (no output — clean)
 ```
-
-**Promotion cascades one level at a time, not all the way out.** Tag the
-re-export itself and its own JSDoc governs instead of promoting — a
-`/** @private */` on that same `export { sign } from "./sign"` line makes the
-import fail again, this time with a private-export diagnostic, because the
-re-export's own tag is what's consulted (see
-[Re-exports and one-hop semantics](#re-exports-and-one-hop-semantics) below).
 
 The cascade is visible with a nested boundary. Given
 
@@ -297,8 +280,7 @@ import { secretKey } from "./auth.package/secrets.package";
 console.log(secretKey);
 ```
 
-still can't — that deep path skips the outer index and hits
-`secrets.package`'s own table directly:
+still can't; that deep path crosses the `auth.package` boundary:
 
 ```
 src/checkout.ts
@@ -310,20 +292,7 @@ src/checkout.ts
 Only once `auth.package/index.ts` *also* adds its own bare
 `export { secretKey } from "./secrets.package";` does the promotion reach
 one level further out, to `src/` — and even then, only through
-`./auth.package` (the outer index), not through a direct reach-in. Every
-step of wider exposure is a separate, visible edit to an `index.ts` file —
-"cascades one deliberate level at a time" means exactly this: nobody can
-widen visibility by two levels with one line.
-
-**Nested boundaries still nest for plain containment, independent of any of
-this.** A file *inside* `secrets.package` can freely import an unrelated
-`@package` export tagged directly on a file in `auth.package` itself — no
-re-export, no index loophole, no promotion needed — because `secrets.package`
-is nested inside `auth.package` (see [Package](#package) above: visibility
-flows inward and downward). The reverse doesn't hold: a file directly in
-`auth.package` cannot reach a `@package` export tagged directly inside
-`secrets.package`, only through whatever `secrets.package/index.ts` chooses
-to bare-re-export, per the cascade above.
+`./auth.package` (the outer index), not through a direct reach-in.
 
 ## Filename loophole
 
@@ -332,6 +301,8 @@ to bare-re-export, per the cascade above.
 everything **directly** inside `foo/` (one level only — not
 `foo/nested/bar.ts`).
 
+**Example 5:**
+
 ```
 src/
 ├── cart.ts       ── companion file
@@ -339,7 +310,8 @@ src/
     └── total.ts  ── exports computeTotal, @package
 ```
 
-With `filenameLoophole: false` (the default), `src/cart.ts` importing from
+Assuming all directories are package boundaries and
+`filenameLoophole: false` (the default), `src/cart.ts` importing from
 `./cart/total`:
 
 ```ts
@@ -360,6 +332,11 @@ src/cart.ts
 With `filenameLoophole: true`, the same import is clean — `cart.ts` and
 `cart/` are treated as one package.
 
+The `cart.ts` effectively stands on the `cart/` package boundary  —
+as an importer it behaves like it's inside the `cart/` package, and as an exporter it behaves like it's outside the `cart/` package. This is useful for a "public API"
+file that re-exports everything from a directory, while still being able to
+reach into that directory for private helpers.
+
 ## Re-exports and one-hop semantics
 
 Re-export checking is **one-hop**: when a file re-exports a name
@@ -377,6 +354,8 @@ Two consequences fall out of this:
    restated.
 2. **A tagged re-export's own tag wins**, restoring (or changing) visibility
    for whoever imports through it.
+
+**Example 6:**
 
 `src/cart/total.ts`:
 
@@ -430,17 +409,14 @@ src/other/reexport.ts
 ✖ 1 problem (1 error, 0 warnings)
 ```
 
-(Note the message: "re-export", not "import" — same rule, a different
-diagnostic wording for a re-export statement vs. a plain import.)
-
 ## External vs. internal
 
 ImportLint only ever checks **internal** imports — specifiers that resolve
-to a file inside your project. Anything that resolves through
-`node_modules` (a real npm dependency, a Node.js builtin, or — depending on
-`treatSelfReferenceAs`, see below — your own package imported by name) is
+to a file inside your project. An npm dependency or a Node.js builtin, etc. is
 **external** and is never checked, regardless of what access tag the target
 file's exports carry.
+
+**Example 7:*
 
 `node_modules/left-pad/index.js`:
 
@@ -456,12 +432,11 @@ import { pad } from "left-pad"; // external: resolves through node_modules
 console.log(pad("x"));
 ```
 
-This lints clean (exit code `0`) even with `defaultImportability: "package"`
-project-wide — `left-pad`'s own `@private` tag is irrelevant, because the
+This lints clean — `left-pad`'s own `@private` tag is irrelevant, because the
 import never resolves to an internal file.
 
 **Self-references** — importing your own package by its `package.json`
-`name` (or an `exports` map subpath) instead of a relative path — are a gray
+`name` instead of a relative path — are a gray
 area, controlled by `treatSelfReferenceAs` (default: `"external"`). With a
 `package.json` `name` of `"shop"` and an `exports` map entry
 `"./cart": "./src/cart/total.js"`, `src/receipt.ts` can reach `computeTotal`
@@ -476,10 +451,3 @@ as any other node_modules-style resolution. With `treatSelfReferenceAs:
 "internal"`, it's checked exactly like a relative import — if `computeTotal`
 is package-private and `receipt.ts` is outside its package, it's a real
 violation.
-
-This same mechanic is the core of monorepo-style boundaries: a **name-based**
-import of a sibling workspace package (`import { x } from "@proj/bar"`)
-resolves through `node_modules` and is external, while a **relative**
-reach-in across the same two packages (`import { x } from "../../bar/src/internal"`)
-is internal and fully checked. See the monorepo playbook in
-[`adoption.md`](./adoption.md) for a worked example.
