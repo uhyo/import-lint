@@ -182,6 +182,14 @@ pub fn run_init(cwd: &Path, force: bool) -> Result<(), InitError> {
         );
     }
     let _ = writeln!(stderr, "Wrote {}", jsonc_path.display());
+    let _ = writeln!(
+        stderr,
+        "tip: `import-lint docs` and `import-lint explain <message-id>` print built-in documentation"
+    );
+    let _ = writeln!(
+        stderr,
+        "tip: using AI coding agents? Copy the ready-made agent skill into your project:\n     https://github.com/uhyo/import-lint/tree/master/skills/import-lint"
+    );
 
     Ok(())
 }

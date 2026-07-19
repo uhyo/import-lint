@@ -62,6 +62,29 @@ fn init_scaffolds_a_config_that_lints_clean() {
     assert_eq!(lint_out.stdout, "");
 }
 
+/// The success output points at the built-in docs and the copy-pastable agent
+/// skill (stderr only, per D-I7).
+#[test]
+fn init_success_output_mentions_docs_and_agent_skill() {
+    let dir = TempDir::new().unwrap();
+
+    let out = run_in(dir.path(), &["init"]);
+
+    assert!(out.status.success(), "stderr: {}", out.stderr);
+    assert_eq!(out.stdout, "", "stdout should be empty");
+    assert!(
+        out.stderr.contains("import-lint docs"),
+        "stderr: {}",
+        out.stderr
+    );
+    assert!(
+        out.stderr
+            .contains("https://github.com/uhyo/import-lint/tree/master/skills/import-lint"),
+        "stderr: {}",
+        out.stderr
+    );
+}
+
 #[test]
 fn refuses_to_overwrite_an_existing_jsonc_config_without_force() {
     let dir = TempDir::new().unwrap();

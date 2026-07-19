@@ -160,6 +160,14 @@ has three short guides:
   choosing a starting configuration and rolling it out, including a phased
   strategy for an existing codebase.
 
+The essentials are also built into the CLI — `import-lint docs` prints
+condensed topic guides and `import-lint explain <message-id>` explains a
+diagnostic, always matching the installed version. Using AI coding agents? A
+ready-made agent skill covering all of this lives in
+[`skills/import-lint/`](https://github.com/uhyo/import-lint/tree/master/skills/import-lint) —
+copy it into your project (e.g. `.claude/skills/import-lint/` for Claude Code,
+or wherever your agent tool looks for skills).
+
 ## CLI flags
 
 ```
@@ -179,7 +187,11 @@ import-lint [paths...]
 | `--watch-poll [ms]` | Watch mode using a polling watcher. Implies `--watch`. | off |
 
 `import-lint init [--force]` scaffolds `.importlintrc.jsonc`
-into the current directory. Two debug
+into the current directory. `import-lint docs [topic]` prints a built-in
+documentation topic (`concepts`, `config`, or `fixing`), and
+`import-lint explain <message-id>` explains a diagnostic and how to fix it —
+both always match the installed version, and are also aimed at AI coding
+agents working in a repository that uses ImportLint. Two debug
 subcommands are also available (not part of the stable output contract):
 `import-lint inspect <file>` dumps one file's extracted module info as JSON;
 `import-lint graph [paths...]` dumps the discovery+resolution graph as JSON.

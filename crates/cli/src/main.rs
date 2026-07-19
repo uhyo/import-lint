@@ -24,11 +24,19 @@ use oxc_parser::Parser as OxcParser;
 use oxc_str::CompactStr;
 use serde::Serialize;
 
+mod docs;
 mod init;
 
 /// A Rust CLI linter that checks module-boundary import access (JSDoc `@package`/`@private`).
 #[derive(ClapParser, Debug)]
-#[command(name = "import-lint", version, about, long_about = None)]
+#[command(
+    name = "import-lint",
+    version,
+    about,
+    long_about = None,
+    after_help = "Built-in documentation: `import-lint docs` (topic guides) and \
+`import-lint explain <message-id>` (what a diagnostic means and how to fix it)."
+)]
 struct Cli {
     #[command(subcommand)]
     command: Option<Command>,
@@ -102,6 +110,20 @@ enum Command {
     },
     /// Run the LSP server (stdio).
     Lsp,
+    /// Print a built-in documentation topic (the mental model, config
+    /// reference, or how to fix violations). With no topic, list the
+    /// available topics.
+    Docs {
+        /// The topic to print: `concepts`, `config`, or `fixing`.
+        topic: Option<String>,
+    },
+    /// Explain a diagnostic by its message id (the `messageId` field of
+    /// `--format json` output), including the recommended fixes. With no id,
+    /// list the available ids.
+    Explain {
+        /// The message id to explain, e.g. `package` or `private:reexport`.
+        id: Option<String>,
+    },
     /// Scaffold a `.importlintrc.jsonc` into the current directory, which
     /// thereby becomes the project root (M9, `docs/PLAN-init.md`).
     Init {
@@ -119,6 +141,8 @@ fn main() -> ExitCode {
         Some(Command::Inspect { file }) => inspect(&file),
         Some(Command::Graph { paths, tsconfig }) => graph(paths, tsconfig),
         Some(Command::Lsp) => lsp_command(),
+        Some(Command::Docs { topic }) => docs_command(topic.as_deref()),
+        Some(Command::Explain { id }) => explain_command(id.as_deref()),
         Some(Command::Init { force }) => init_command(force),
         None if cli.watch || cli.watch_poll.is_some() => watch_command(cli),
         None => lint(cli),
@@ -282,6 +306,54 @@ fn lsp_command() -> ExitCode {
             eprintln!("import-lint: lsp server failed: {err}");
             ExitCode::from(2)
         }
+    }
+}
+
+/// The `docs` subcommand: print a built-in documentation topic to stdout, or
+/// the topic index with no argument. Content lives in `docs.rs`.
+fn docs_command(topic: Option<&str>) -> ExitCode {
+    match topic {
+        None => {
+            print!("{}", docs::TOPICS_INDEX);
+            ExitCode::SUCCESS
+        }
+        Some(name) => match docs::topic(name) {
+            Some(body) => {
+                print!("{body}");
+                ExitCode::SUCCESS
+            }
+            None => {
+                eprintln!(
+                    "import-lint: unknown docs topic '{name}' (available: {})",
+                    docs::TOPIC_NAMES
+                );
+                ExitCode::from(2)
+            }
+        },
+    }
+}
+
+/// The `explain` subcommand: print the explanation for one diagnostic message
+/// id to stdout, or the id index with no argument. Content lives in `docs.rs`.
+fn explain_command(id: Option<&str>) -> ExitCode {
+    match id {
+        None => {
+            print!("{}", docs::EXPLAIN_INDEX);
+            ExitCode::SUCCESS
+        }
+        Some(id) => match docs::explanation(id) {
+            Some(body) => {
+                print!("{body}");
+                ExitCode::SUCCESS
+            }
+            None => {
+                eprintln!(
+                    "import-lint: unknown message id '{id}' (available: {})",
+                    docs::EXPLAIN_IDS
+                );
+                ExitCode::from(2)
+            }
+        },
     }
 }
 
