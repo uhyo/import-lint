@@ -65,8 +65,7 @@ For every release after v0.1.0:
    reports its compiled-in `CARGO_PKG_VERSION` (from this same bump) at
    `--version` — the `npm-smoke` CI job asserts the two match, so an unbumped
    `Cargo.toml` fails the release rather than shipping a skewed npm package.
-2. Update `README.md`'s Roadmap/changelog if applicable.
-3. If the config file shape changed, check `README.md`'s `## Config file`
+2. If the config file shape changed, check `README.md`'s `## Config file`
    example against `crates/cli/src/init.rs`'s `TEMPLATE` — the two are meant
    to read as the same text (docs/PLAN-init.md R-I4); the `init` round-trip
    unit tests catch schema drift but not prose drift between them. This
@@ -81,15 +80,17 @@ For every release after v0.1.0:
    v0.1.5 (PLAN-docs.md R-D4), then removed in the 2026-07-19 docs rework.
    Unless the config schema changed, release prep touches nothing in
    `docs/guides/`.
-4. If this is the first release since `init --preset` was removed (after
+3. If this is the first release since `init --preset` was removed (after
    v0.1.3; `init` now always writes the one template, non-interactively):
    note the CLI-breaking change in the release notes — the v0.1.3 npm build
    is the last one that accepts (and, in scripts/CI, requires) `--preset`,
    and the guides' plain `npx @import-lint/cli init` commands only work
    against this release or later.
-5. Follow the runbook above, substituting the new version for `v0.1.0` in the git
+4. Follow the runbook above, substituting the new version for `v0.1.0` in the git
    tag.
-6. **Write the release notes by hand after `release.yml` finishes.** The
+5. **Write the release notes by hand after `release.yml` finishes.** The
+   changelog lives here and nowhere else (the README carries no
+   roadmap/changelog section). The
    workflow creates the GitHub Release with `generate_release_notes: true`,
    but GitHub only auto-generates notes from pull requests merged between the
    two tags — with direct-to-`master` commits the body degenerates to just the
