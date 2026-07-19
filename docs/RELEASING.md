@@ -84,6 +84,21 @@ For every release after v0.1.0:
    against this release or later.
 5. Follow the runbook above, substituting the new version for `v0.1.0` in the git
    tag.
+6. **Write the release notes by hand after `release.yml` finishes.** The
+   workflow creates the GitHub Release with `generate_release_notes: true`,
+   but GitHub only auto-generates notes from pull requests merged between the
+   two tags — with direct-to-`master` commits the body degenerates to just the
+   "Full Changelog" compare link. Edit the release afterwards:
+
+   ```sh
+   gh release edit vX.Y.Z --notes-file notes.md
+   ```
+
+   House style (see v0.1.4–v0.1.6): `##` headline sections leading with the
+   user-visible change ("New: …", "Fixed: …", "Breaking change: …"), prose
+   paragraphs, a note when lint behavior is unchanged, and the
+   auto-generated `**Full Changelog**: …/compare/vX.Y.(Z-1)...vX.Y.Z` line
+   kept at the bottom.
 
 `import-lint-core`'s API has no stability guarantee yet (pre-1.0) — treat any
 breaking change to its public items as at least a minor version bump.
