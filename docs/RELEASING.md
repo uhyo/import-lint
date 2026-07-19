@@ -76,6 +76,11 @@ For every release after v0.1.0:
    same options/defaults as `crates/cli/src/init.rs`'s template
    (docs/PLAN.md §3.6) — a schema change that isn't reflected in the
    guides is a doc bug even though nothing in CI catches it.
+   Note: the guides no longer carry per-release "Documents ImportLint
+   vX.Y.Z." version stamps — those were bumped during release prep through
+   v0.1.5 (PLAN-docs.md R-D4), then removed in the 2026-07-19 docs rework.
+   Unless the config schema changed, release prep touches nothing in
+   `docs/guides/`.
 4. If this is the first release since `init --preset` was removed (after
    v0.1.3; `init` now always writes the one template, non-interactively):
    note the CLI-breaking change in the release notes — the v0.1.3 npm build

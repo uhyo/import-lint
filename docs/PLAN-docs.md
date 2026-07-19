@@ -93,7 +93,7 @@ guide set under `docs/guides/`. Explicitly **no docs-site infrastructure**
 | R-D1 | Subtle-semantics errors in `concepts.md` (one-hop, loophole cascade) | D-D3 run-everything rule; examples derived from conformance fixtures; final review by the project lead against the rule-engine source. |
 | R-D2 | README bloat (teaching added, nothing removed) | D-D5 line budget; the deep option-reasoning moves to `concepts.md`, terse one-liners remain. |
 | R-D3 | Relative links broken on npm/crates package pages | §3.5 absolute-URL rule for README→guides links. |
-| R-D4 | Guides drift as options evolve | Guides carry a "documents behavior as of vX.Y.Z" line; RELEASING.md checklist item extended (§3.6). |
+| R-D4 | Guides drift as options evolve | Guides carry a "documents behavior as of vX.Y.Z" line; RELEASING.md checklist item extended (§3.6). *(Update 2026-07-19: the stamp lines were dropped in the docs rework after v0.1.5 — the guides now track master with no per-release bump; only RELEASING.md's config prose-sync check remains.)* |
 
 ## 5. Milestones
 
