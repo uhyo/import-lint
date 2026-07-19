@@ -23,7 +23,7 @@ clap = { workspace = true }
 crossbeam-channel = { workspace = true }
 dunce = { workspace = true }
 ignore = { workspace = true }
-import_lint = { path = "../core", package = "import-lint-core", version = "0.1.5" }
+import_lint = { path = "../core", package = "import-lint-core", version = "0.1.6" }
 lsp-server = { workspace = true }
 lsp-types = { workspace = true }
 notify = { workspace = true }
