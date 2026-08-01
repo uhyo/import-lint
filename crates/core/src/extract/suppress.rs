@@ -74,10 +74,9 @@ fn parse_directive(content: &str) -> Option<(DirectiveKind, Vec<CompactStr>)> {
     // keyword pair where one IS a prefix of the other.
     let (kind, rest) = if let Some(rest) = trimmed.strip_prefix("import-lint-disable-next-line") {
         (DirectiveKind::NextLine, rest)
-    } else if let Some(rest) = trimmed.strip_prefix("import-lint-disable-line") {
-        (DirectiveKind::Line, rest)
     } else {
-        return None;
+        let rest = trimmed.strip_prefix("import-lint-disable-line")?;
+        (DirectiveKind::Line, rest)
     };
     // The keyword must be a whole word (`import-lint-disable-liner` is not a
     // directive), delimited by whitespace or the end of the comment.
