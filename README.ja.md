@@ -203,6 +203,28 @@ ImportLint は、`--config` で明示的にファイルを指定しない限り�
 
 設定ファイル内の未知のキー(オプション名の typo や、認識されないルール)は、黙って無視されるのではなく、ロードエラー(終了コード `2`)になります。
 
+## コメントによる違反の抑制
+
+import 側で違反を(いったん修正せずに)受け入れる場合は、ディレクティブコメントを使います。ESLint の `eslint-disable-next-line` に相当する機能です。
+
+```ts
+// import-lint-disable-next-line -- 段階的に移行中 (#123 参照)
+import { issueToken } from "../auth/token";
+
+import { issueToken } from "../auth/token"; // import-lint-disable-line
+```
+
+`import-lint-disable-next-line` は次の行の診断を、`import-lint-disable-line` は自身の行の診断を抑制します。どちらも `//` 行コメントでも `/* ... */` ブロックコメントでも使えます。ルール名を付けないディレクティブは対象行のすべての診断を抑制し、ルール名リスト(カンマまたは空白区切り)を付けると対象を限定できます — アクセス違反は `package-access`、`--report-unresolved` の警告は `unresolved` です。
+
+```ts
+// import-lint-disable-next-line package-access
+import { issueToken } from "../auth/token";
+```
+
+` -- ` 以降は自由記述の理由として扱われ、パーサーには無視されます。ディレクティブは行単位でマッチするため、複数行の import 文では、違反しているspecifierの直上(波括弧の内側)にディレクティブを置いてください。
+
+抑制は境界に恒久的な穴を開けるものなので、可能な限り本来の修正(`import-lint docs fixing`)を優先してください。
+
 ## 出力フォーマット
 
 - **`pretty`**(デフォルト)— ESLint の stylish に似た、ファイルごとにグループ化された形式。パスはカレントディレクトリからの相対パスです。stdout がTTY のときは色付き、それ以外はプレーンな出力になります。クリーンな実行では何も出力しません。
@@ -293,6 +315,7 @@ ImportLint の `package-access` ルールはESLintプラグインの `import-acc
 - **パッケージを入れ替える**: `package.json` の `devDependencies` で`eslint-plugin-import-access` を `@import-lint/cli` に置き換えます(`npm uninstall eslint-plugin-import-access && npm install -D @import-lint/cli`)。インストールされるコマンドは `import-lint` です。ESLint 設定からはプラグインを削除してください。
 - **オプションは同じ名前で1対1に対応**し、デフォルト値も同じです。ルールオプションをそのまま `.importlintrc.jsonc` の `rules.package-access` にコピーしてください(ESLint プラグインの `import-access/jsdoc` というルール名は`rules.package-access` になりました)。
 - `json` 出力フォーマットの `ruleId` は `package-access` になっています（`import-access/jsdoc` ではありません）。ESLint プラグインのルール ID を前提にしている CI のフィルタや `reviewdog` のルール ID マッチは更新してください。
+- **抑制コメント**: `// eslint-disable-next-line import-access/jsdoc` は `// import-lint-disable-next-line`(または `// import-lint-disable-next-line package-access`)に置き換えてください。[コメントによる違反の抑制](#コメントによる違反の抑制)を参照してください。
 
 ただし、1つだけ**挙動の変更**があります。`packageDirectory` を設定した場合、マッチする祖先ディレクトリを*持たない*ファイルはプロジェクトルートのパッケージに属し、自由にインポートし合うことができます。ESLint版では、この場合ファイルが属するディレクトリがパッケージとして扱われてしまっていました。
 

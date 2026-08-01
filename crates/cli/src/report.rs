@@ -191,7 +191,9 @@ fn read_cached<'a>(
 
 /// `--report-unresolved`: emit a warn-severity diagnostic for every checked entry
 /// (among `files`) whose specifier failed to resolve (D8's opt-in debug aid). These
-/// never affect the exit code (M5 brief §3).
+/// never affect the exit code (M5 brief §3). Suppression directive comments apply
+/// here too, under the rule name `unresolved` (a bare directive silences these
+/// along with everything else on the line).
 fn collect_unresolved(
     graph: &ModuleGraph,
     files: &[&Path],
@@ -208,6 +210,13 @@ fn collect_unresolved(
                 graph.resolution(target, &entry.specifier),
                 Some(Provenance::Unresolved)
             ) {
+                continue;
+            }
+            if file
+                .suppressions
+                .iter()
+                .any(|s| s.suppresses(entry.span.start, "unresolved"))
+            {
                 continue;
             }
             let source = read_cached(source_cache, target, overlays);

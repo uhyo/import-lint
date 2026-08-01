@@ -183,6 +183,18 @@ first fix that fits:
      anywhere. Rarely the right choice — it gives up the boundary for that
      export; prefer 1 or 2.
 
+To acknowledge a violation without fixing it yet, suppress it at the import
+site with a directive comment (the equivalent of ESLint's
+`eslint-disable-next-line`):
+
+    // import-lint-disable-next-line -- migrating in #123
+    import { issueToken } from "../auth/token";
+
+`// import-lint-disable-line` at the end of the line works too. An optional
+rule name list (`import-lint-disable-next-line package-access`) restricts
+what is suppressed; text after ` -- ` is a free-form justification. Prefer a
+real fix — every suppression is a hole in the boundary.
+
 During gradual adoption, config-level changes can also be appropriate:
 adjusting `packageDirectory` patterns, `defaultImportability`, or
 `excludeSourcePatterns`. Do not reach for those (or `"severity": "off"`)
@@ -217,9 +229,11 @@ Fixes, in order of preference:
   3. Tag the original export `/** @public */` to allow importing from
      anywhere. Rarely the right choice — prefer 1 or 2.
 
-Do not silence it by setting `"severity"` to "off"/"warn", adding
-`excludeSourcePatterns`, or loosening `defaultImportability` — those weaken
-checking project-wide. See `import-lint docs fixing`.
+To acknowledge it without fixing it yet, add a directive comment above the
+import: `// import-lint-disable-next-line -- reason`. Do not silence it by
+setting `"severity"` to "off"/"warn", adding `excludeSourcePatterns`, or
+loosening `defaultImportability` — those weaken checking project-wide. See
+`import-lint docs fixing`.
 "#;
 
 const EXPLAIN_PACKAGE_REEXPORT: &str = r#"package:reexport — "Cannot re-export a package-private export '...'"

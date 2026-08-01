@@ -16,7 +16,8 @@ pub mod rule;
 pub use config::{ConfigError, LintConfig, Rules, Severity, find_config};
 pub use diagnostics::{Diagnostic, MessageId};
 pub use extract::{
-    Access, CheckedEntry, EntryKind, ExportInfo, FileModuleInfo, extract as extract_file,
+    Access, CheckedEntry, EntryKind, ExportInfo, FileModuleInfo, Suppression,
+    extract as extract_file,
 };
 pub use graph::ModuleGraph;
 pub use resolve::{ProjectResolver, Provenance, SelfReferenceMode};

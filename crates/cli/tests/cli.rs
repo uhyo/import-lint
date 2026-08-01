@@ -391,3 +391,135 @@ fn explicit_config_flag_is_used_over_discovery() {
     assert_eq!(out.status.code(), Some(1), "stderr: {}", out.stderr);
     assert!(out.stdout.contains("consumer.ts"));
 }
+
+// ---- suppression directive comments (issue #2) ----
+
+#[test]
+fn disable_next_line_comment_suppresses_the_violation() {
+    let dir = TempDir::new().unwrap();
+    write(
+        dir.path(),
+        "src/consumer.ts",
+        "// import-lint-disable-next-line\nimport { helper } from \"./internal/util\";\nconsole.log(helper);\n",
+    );
+    write(
+        dir.path(),
+        "src/internal/util.ts",
+        "/** @package */\nexport const helper = 1;\n",
+    );
+
+    let out = run_in(dir.path(), &[]);
+
+    assert!(out.status.success(), "stdout: {}", out.stdout);
+    assert!(out.stdout.is_empty(), "stdout: {}", out.stdout);
+}
+
+#[test]
+fn disable_line_comment_suppresses_the_violation_on_its_own_line() {
+    let dir = TempDir::new().unwrap();
+    write(
+        dir.path(),
+        "src/consumer.ts",
+        "import { helper } from \"./internal/util\"; // import-lint-disable-line\nconsole.log(helper);\n",
+    );
+    write(
+        dir.path(),
+        "src/internal/util.ts",
+        "/** @package */\nexport const helper = 1;\n",
+    );
+
+    let out = run_in(dir.path(), &[]);
+
+    assert!(out.status.success(), "stdout: {}", out.stdout);
+    assert!(out.stdout.is_empty(), "stdout: {}", out.stdout);
+}
+
+#[test]
+fn disable_next_line_with_matching_rule_name_suppresses() {
+    let dir = TempDir::new().unwrap();
+    write(
+        dir.path(),
+        "src/consumer.ts",
+        "// import-lint-disable-next-line package-access -- migration, see #2\nimport { helper } from \"./internal/util\";\nconsole.log(helper);\n",
+    );
+    write(
+        dir.path(),
+        "src/internal/util.ts",
+        "/** @package */\nexport const helper = 1;\n",
+    );
+
+    let out = run_in(dir.path(), &[]);
+
+    assert!(out.status.success(), "stdout: {}", out.stdout);
+    assert!(out.stdout.is_empty(), "stdout: {}", out.stdout);
+}
+
+#[test]
+fn disable_next_line_with_other_rule_name_does_not_suppress() {
+    let dir = TempDir::new().unwrap();
+    write(
+        dir.path(),
+        "src/consumer.ts",
+        "// import-lint-disable-next-line some-other-rule\nimport { helper } from \"./internal/util\";\nconsole.log(helper);\n",
+    );
+    write(
+        dir.path(),
+        "src/internal/util.ts",
+        "/** @package */\nexport const helper = 1;\n",
+    );
+
+    let out = run_in(dir.path(), &[]);
+
+    assert_eq!(out.status.code(), Some(1));
+    assert!(
+        out.stdout
+            .contains("Cannot import a package-private export 'helper'")
+    );
+}
+
+#[test]
+fn disable_next_line_covers_only_its_own_line_of_a_multiline_import() {
+    let dir = TempDir::new().unwrap();
+    // Two violating specifiers on separate lines of one import statement: the
+    // directive inside the braces suppresses `helper` (next line) but not
+    // `other` (the line after).
+    write(
+        dir.path(),
+        "src/consumer.ts",
+        "import {\n  // import-lint-disable-next-line\n  helper,\n  other,\n} from \"./internal/util\";\nconsole.log(helper, other);\n",
+    );
+    write(
+        dir.path(),
+        "src/internal/util.ts",
+        "/** @package */\nexport const helper = 1;\n/** @package */\nexport const other = 2;\n",
+    );
+
+    let out = run_in(dir.path(), &[]);
+
+    assert_eq!(out.status.code(), Some(1));
+    assert!(
+        !out.stdout
+            .contains("Cannot import a package-private export 'helper'"),
+        "stdout: {}",
+        out.stdout
+    );
+    assert!(
+        out.stdout
+            .contains("Cannot import a package-private export 'other'")
+    );
+}
+
+#[test]
+fn disable_next_line_suppresses_unresolved_warning_too() {
+    let dir = TempDir::new().unwrap();
+    write(
+        dir.path(),
+        "src/consumer.ts",
+        "// import-lint-disable-next-line\nimport { gone } from \"./does-not-exist\";\nconsole.log(gone);\n",
+    );
+
+    let out = run_in(dir.path(), &["--report-unresolved"]);
+
+    assert!(out.status.success(), "stdout: {}", out.stdout);
+    assert!(out.stdout.is_empty(), "stdout: {}", out.stdout);
+}
