@@ -353,6 +353,64 @@ fn ts_namespace_identifier_is_not_an_ambient_module() {
     assert!(!info.export_table.contains_key("x"));
 }
 
+// ---- suppression directive comments ----
+
+#[test]
+fn disable_next_line_records_the_following_line_as_suppressed() {
+    let source = "// import-lint-disable-next-line\nimport { x } from \"./m\";\n";
+    let info = extract_ts(source);
+    assert_eq!(info.suppressions.len(), 1);
+    let suppression = &info.suppressions[0];
+    assert!(suppression.rules.is_empty());
+    // The suppressed range is exactly the import's line: the entry's span
+    // starts inside it.
+    let entry_start = info.checked_entries[0].span.start;
+    assert!(suppression.suppresses(entry_start, "package-access"));
+    // ...but nothing on the comment's own line is suppressed.
+    assert!(!suppression.suppresses(0, "package-access"));
+}
+
+#[test]
+fn disable_line_records_the_comment_line_as_suppressed() {
+    let source = "import { x } from \"./m\"; // import-lint-disable-line\n";
+    let info = extract_ts(source);
+    assert_eq!(info.suppressions.len(), 1);
+    let entry_start = info.checked_entries[0].span.start;
+    assert!(info.suppressions[0].suppresses(entry_start, "package-access"));
+}
+
+#[test]
+fn block_comment_directive_is_recognized() {
+    let source = "/* import-lint-disable-next-line */\nimport { x } from \"./m\";\n";
+    let info = extract_ts(source);
+    assert_eq!(info.suppressions.len(), 1);
+    let entry_start = info.checked_entries[0].span.start;
+    assert!(info.suppressions[0].suppresses(entry_start, "package-access"));
+}
+
+#[test]
+fn directive_rule_names_are_recorded() {
+    let source =
+        "// import-lint-disable-next-line package-access -- reason\nimport { x } from \"./m\";\n";
+    let info = extract_ts(source);
+    assert_eq!(info.suppressions.len(), 1);
+    assert_eq!(info.suppressions[0].rules, vec!["package-access"]);
+}
+
+#[test]
+fn ordinary_comments_record_no_suppressions() {
+    let source = "// a plain comment\n/** @package */\nexport const x = 1;\n";
+    let info = extract_ts(source);
+    assert!(info.suppressions.is_empty());
+}
+
+#[test]
+fn disable_next_line_on_last_line_records_nothing() {
+    let source = "import { x } from \"./m\";\n// import-lint-disable-next-line";
+    let info = extract_ts(source);
+    assert!(info.suppressions.is_empty());
+}
+
 fn source_index(source: &str, needle: &str) -> u32 {
     u32::try_from(source.find(needle).expect("needle not found in source")).unwrap()
 }

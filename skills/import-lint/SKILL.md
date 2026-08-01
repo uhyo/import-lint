@@ -79,6 +79,22 @@ first fix that fits, in this order:
 3. **Tag the original export `/** @public */`** — makes it importable from anywhere. This is
    rarely the right choice; prefer 1 or 2 so the boundary stays meaningful.
 
+To acknowledge a violation without fixing it (e.g. during a gradual migration), suppress it at
+the import site with a directive comment — the equivalent of ESLint's `eslint-disable-next-line`:
+
+```ts
+// import-lint-disable-next-line -- reason (optional, after " -- ")
+import { helper } from "../other.package/internal";
+
+import { helper } from "../other.package/internal"; // import-lint-disable-line
+```
+
+An optional rule-name list restricts what is suppressed (`import-lint-disable-next-line
+package-access`; `unresolved` matches `--report-unresolved` warnings). Directives match lines: in
+a multiline import, place the comment directly above the violating specifier, inside the braces.
+Only suppress when the user asks for it or a real fix is out of scope — every suppression is a
+hole in the boundary.
+
 Do NOT fix violations by setting the rule severity to `"off"`/`"warn"`, adding
 `excludeSourcePatterns`, or loosening `defaultImportability` unless the user explicitly asks —
 those weaken checking project-wide rather than fixing the design issue.

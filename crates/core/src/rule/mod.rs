@@ -19,6 +19,10 @@ use crate::resolve::Provenance;
 pub use in_package::{CompiledPackageOptions, compile_package_directory_patterns, is_in_package};
 pub use options::{Importability, PackageAccessRuleOptions, SelfRefOpt};
 
+/// The rule name suppression directives match this engine's diagnostics under —
+/// the same name the config file and rendered output use for the rule.
+pub const PACKAGE_ACCESS_RULE_NAME: &str = "package-access";
+
 /// Run the rule engine over every lint target in `graph`, producing every violation
 /// under `options`. `project_root` anchors `packageDirectory` and
 /// `excludeSourcePatterns` glob matching (both match against paths relative to it).
@@ -121,6 +125,17 @@ pub fn check_files(
                     }
                 }
             };
+
+            // Caller-side suppression directives (`import-lint-disable-next-line`
+            // / `import-lint-disable-line` in the importer file) silence the
+            // violation at this entry's line.
+            if file
+                .suppressions
+                .iter()
+                .any(|s| s.suppresses(entry.span.start, PACKAGE_ACCESS_RULE_NAME))
+            {
+                continue;
+            }
 
             diagnostics.push(Diagnostic {
                 path: importer.to_path_buf(),

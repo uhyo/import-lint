@@ -118,6 +118,7 @@ mod tests {
             star_exports: star_exports.iter().map(|s| CompactStr::from(*s)).collect(),
             ambient_modules: Vec::new(),
             specifiers: specifiers.iter().map(|s| CompactStr::from(*s)).collect(),
+            suppressions: Vec::new(),
         })
     }
 

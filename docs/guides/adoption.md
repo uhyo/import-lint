@@ -147,6 +147,22 @@ import-lint .
 
 One directory sealed; everything else is untouched and still lints clean.
 
+If a reach-in can't be fixed right away — a refactor too big for the sealing
+commit — suppress it at the import site and keep a paper trail instead of
+leaving the boundary unsealed:
+
+```ts
+// import-lint-disable-next-line -- billing refactor, tracked in #123
+import { legacyTotals } from "./billing.package/internal/totals";
+```
+
+The directive suppresses the diagnostic on the next line
+(`// import-lint-disable-line` at the end of the line also works), so the
+boundary still protects everything else while the stragglers are visible,
+greppable, and justified. See the root README's
+[Suppressing a violation with a comment](../../README.md#suppressing-a-violation-with-a-comment)
+for the full syntax.
+
 **3. Wire `--format github` into CI.** `--format github` emits [GitHub
 Actions workflow commands](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-commands)
 so a new violation shows up as an inline PR annotation, right on the line

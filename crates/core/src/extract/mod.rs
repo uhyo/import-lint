@@ -8,6 +8,7 @@
 
 mod jsdoc;
 pub mod module_info;
+mod suppress;
 
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
@@ -25,7 +26,7 @@ use oxc_semantic::{Semantic, SemanticBuilder};
 use oxc_span::{SourceType, Span};
 use oxc_str::CompactStr;
 
-pub use module_info::{Access, CheckedEntry, EntryKind, ExportInfo, FileModuleInfo};
+pub use module_info::{Access, CheckedEntry, EntryKind, ExportInfo, FileModuleInfo, Suppression};
 
 /// Parse `source_text` (already read from `path`) and extract its owned module
 /// summary. `allocator` backs the parse; the caller is expected to reset/drop it
@@ -46,6 +47,8 @@ pub fn extract<'a>(
 
     let mut extractor = Extractor::new(path, semantic, source_text);
     extractor.visit_statements(&ret.program.body);
+    extractor.out.suppressions =
+        suppress::collect_suppressions(extractor.semantic.comments(), source_text);
     extractor.out
 }
 
@@ -67,6 +70,7 @@ impl<'a> Extractor<'a> {
                 star_exports: Vec::new(),
                 ambient_modules: Vec::new(),
                 specifiers: Vec::new(),
+                suppressions: Vec::new(),
             },
         }
     }

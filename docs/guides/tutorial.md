@@ -201,6 +201,12 @@ live inside the boundary.
 
 However, `@public` is rarely the right choice; it makes the export available *everywhere*, which is usually not what you want. The other two fixes are more common: either re-export it through the boundary's `index.ts` so that the boundary can control its public API, or move the importer into the boundary so it can use the export without exposing it to the outside world.
 
+There is also an escape hatch for violations you can't fix yet: a
+`// import-lint-disable-next-line` directive comment above the import
+suppresses the diagnostic at that one site, like ESLint's
+`eslint-disable-next-line` — see the root README's
+[Suppressing a violation with a comment](../../README.md#suppressing-a-violation-with-a-comment).
+
 ## Where next
 
 - [`concepts.md`](./concepts.md) — the full mental model: package

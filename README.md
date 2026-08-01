@@ -282,6 +282,38 @@ explains each with a worked example.
 Unknown keys anywhere in the config file (a typo'd option name, an unrecognized
 rule) are a hard load error (exit `2`) rather than a silently ignored no-op.
 
+## Suppressing a violation with a comment
+
+To acknowledge a violation at the import site without fixing it (yet), use a
+directive comment — the ImportLint equivalent of ESLint's
+`eslint-disable-next-line`:
+
+```ts
+// import-lint-disable-next-line -- migrating gradually, see #123
+import { issueToken } from "../auth/token";
+
+import { issueToken } from "../auth/token"; // import-lint-disable-line
+```
+
+`import-lint-disable-next-line` suppresses diagnostics on the following line;
+`import-lint-disable-line` suppresses them on its own line. Both work as `//`
+line comments or `/* ... */` block comments. A bare directive suppresses
+everything on the target line; an optional rule-name list (comma- or
+space-separated) restricts it — `package-access` for access violations,
+`unresolved` for `--report-unresolved` warnings:
+
+```ts
+// import-lint-disable-next-line package-access
+import { issueToken } from "../auth/token";
+```
+
+Anything after a ` -- ` separator is a free-form justification, ignored by the
+parser. Directives match lines, so in a multiline import statement, place the
+directive inside the braces, directly above the violating specifier.
+
+Prefer a real fix (`import-lint docs fixing`) — every suppression is a
+permanent hole in the boundary.
+
 ## Output formats
 
 - **`pretty`** (default) — ESLint-stylish-like, grouped by file, paths relative to
@@ -420,6 +452,10 @@ ImportLint's `package-access` rule is a behavioral port of the plugin's
 - The `json` output format's `ruleId` is `package-access` (not
   `import-access/jsdoc`) — update any CI filter or `reviewdog` rule-ID match that
   keyed off the ESLint plugin's rule ID.
+- **Suppression comments**: replace `// eslint-disable-next-line
+  import-access/jsdoc` with `// import-lint-disable-next-line` (optionally
+  `// import-lint-disable-next-line package-access`) — see
+  [Suppressing a violation with a comment](#suppressing-a-violation-with-a-comment).
 - **One deliberate behavioral divergence**: with `packageDirectory` set, a file
   that has *no* matching ancestor directory belongs to a single project-root
   package (all such files import freely from each other), where the plugin
