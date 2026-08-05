@@ -130,7 +130,7 @@ import-lint [paths...]
 | `--config <path>` | 設定ファイルの明示的な指定。存在しないか不正な場合は終了コード `2` になります | カレントディレクトリから上に向かって探索 |
 | `--format <pretty\|json\|github>` | 出力フォーマット — [出力フォーマット](#出力フォーマット) を参照 | `pretty` |
 | `--threads <n>` | 使用するスレッドの数 | コア数 |
-| `--tsconfig <path>` | リゾルバの `paths`/`baseUrl` に使うプロジェクトの `tsconfig.json` のパス | 設定の `tsconfig`、なければ `<プロジェクトルート>/tsconfig.json`(存在する場合) |
+| `--tsconfig <path>` | リゾルバの `paths`/`baseUrl`/`customConditions` に使うプロジェクトの `tsconfig.json` のパス | 設定の `tsconfig`、なければ `<プロジェクトルート>/tsconfig.json`(存在する場合) |
 | `--report-unresolved` | 解決に失敗した import 指定子を黙ってスキップせず、1件ずつ警告として報告する | オフ |
 | `--quiet` | ワーニングの出力を抑制(エラーのみ表示)。`eslint --quiet` と同様 | オフ |
 | `--watch` | [watch モード](#watch-モード) | オフ |
@@ -157,7 +157,7 @@ ImportLint は、`--config` で明示的にファイルを指定しない限り�
   // .gitignore に加えてスキップする glob パターン。プロジェクトルートからの相対パス。
   "exclude": [],
 
-  // リゾルバの `paths`/`baseUrl` に使う tsconfig.json のパス。プロジェクト
+  // リゾルバの `paths`/`baseUrl`/`customConditions` に使う tsconfig.json のパス。プロジェクト
   // ルートからの相対パス。存在すれば "<プロジェクトルート>/tsconfig.json" がデフォルト。
   // "tsconfig": "./tsconfig.json",
 

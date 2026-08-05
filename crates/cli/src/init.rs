@@ -43,8 +43,9 @@ pub const TEMPLATE: &str = r#"// .importlintrc.jsonc
   // Extra glob patterns to skip, on top of .gitignore. Relative to the project root.
   "exclude": [],
 
-  // Path to tsconfig.json (for resolver `paths`/`baseUrl`), relative to the
-  // project root. Defaults to "<project root>/tsconfig.json" if it exists.
+  // Path to tsconfig.json (for resolver `paths`/`baseUrl`/`customConditions`),
+  // relative to the project root.
+  // Defaults to "<project root>/tsconfig.json" if it exists.
   // "tsconfig": "./tsconfig.json",
 
   "rules": {

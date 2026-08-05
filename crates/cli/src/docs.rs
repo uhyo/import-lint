@@ -127,8 +127,8 @@ File and discovery
 Top-level keys
   "include": ["."]     Roots to walk for lint targets.
   "exclude": []        Extra glob patterns to skip, on top of .gitignore.
-  "tsconfig": <path>   tsconfig.json for resolver paths/baseUrl (default:
-                       "<project root>/tsconfig.json" if it exists).
+  "tsconfig": <path>   tsconfig.json for resolver paths/baseUrl/customConditions
+                       (default: "<project root>/tsconfig.json" if it exists).
   "rules": { "package-access": { ... } }
 
 "package-access" rule options (defaults shown)
