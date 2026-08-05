@@ -130,6 +130,209 @@ fn tsconfig_base_url_bare_specifier_resolves_internal() {
     );
 }
 
+// ---- tsconfig customConditions ----
+
+/// Issue #4's shape: a `#`-subpath import whose `imports` map routes to `./src`
+/// sources under a custom condition and to `./dist` declarations by default.
+/// With `customConditions` in the tsconfig, the resolver must take the custom
+/// branch.
+#[test]
+fn custom_condition_selects_imports_map_branch() {
+    let project = Project::new();
+    project.write(
+        "package.json",
+        r##"{
+            "name": "mylib",
+            "imports": {
+                "#src/*": {
+                    "internal-development-my-lib-name": ["./src/*.ts"],
+                    "default": ["./dist/*.d.ts"]
+                }
+            }
+        }"##,
+    );
+    project.write(
+        "tsconfig.json",
+        r##"{ "compilerOptions": { "customConditions": ["internal-development-my-lib-name"] } }"##,
+    );
+    let target = project.write("src/foo.ts", "export const x = 1;\n");
+    project.write("dist/foo.d.ts", "export declare const x: number;\n");
+    let importer = project.write("src/importer.ts", "");
+    let resolver = project.resolver(Some("tsconfig.json"));
+
+    assert_eq!(
+        resolver.resolve(&importer, "#src/foo"),
+        Provenance::Internal(target)
+    );
+}
+
+/// Without `customConditions` the same `imports` map falls through to its
+/// `default` branch — proving the previous test's outcome really came from the
+/// tsconfig, not from key order.
+#[test]
+fn without_custom_condition_imports_map_takes_default_branch() {
+    let project = Project::new();
+    project.write(
+        "package.json",
+        r##"{
+            "name": "mylib",
+            "imports": {
+                "#src/*": {
+                    "internal-development-my-lib-name": ["./src/*.ts"],
+                    "default": ["./dist/*.d.ts"]
+                }
+            }
+        }"##,
+    );
+    project.write("tsconfig.json", r#"{ "compilerOptions": {} }"#);
+    project.write("src/foo.ts", "export const x = 1;\n");
+    let target = project.write("dist/foo.d.ts", "export declare const x: number;\n");
+    let importer = project.write("src/importer.ts", "");
+    let resolver = project.resolver(Some("tsconfig.json"));
+
+    assert_eq!(
+        resolver.resolve(&importer, "#src/foo"),
+        Provenance::Internal(target)
+    );
+}
+
+/// A custom condition gating an external package's `exports` map must apply
+/// there too (customConditions affects all module resolution, matching tsc).
+#[test]
+fn custom_condition_selects_exports_map_branch_in_node_modules() {
+    let project = Project::new();
+    project.write(
+        "tsconfig.json",
+        r##"{ "compilerOptions": { "customConditions": ["my-condition"] } }"##,
+    );
+    project.write(
+        "node_modules/pkg-conditional/package.json",
+        r##"{
+            "name": "pkg-conditional",
+            "exports": { ".": { "my-condition": "./custom.d.ts" } }
+        }"##,
+    );
+    project.write(
+        "node_modules/pkg-conditional/custom.d.ts",
+        "export const x: number;\n",
+    );
+    let importer = project.write("src/importer.ts", "");
+
+    // Sanity check: without the condition the exports map has no matching
+    // branch at all, so the import doesn't resolve.
+    let plain = project.resolver(None);
+    assert_eq!(
+        plain.resolve(&importer, "pkg-conditional"),
+        Provenance::Unresolved
+    );
+
+    let resolver = project.resolver(Some("tsconfig.json"));
+    assert_eq!(
+        resolver.resolve(&importer, "pkg-conditional"),
+        Provenance::External
+    );
+}
+
+/// `customConditions` defined in an `extends` base config (jsonc, extension-less
+/// relative specifier) is picked up through the chain.
+#[test]
+fn custom_condition_from_extends_base_config() {
+    let project = Project::new();
+    project.write(
+        "configs/tsconfig.base.json",
+        r##"{
+            // customConditions lives in the shared base config.
+            "compilerOptions": { "customConditions": ["my-condition"] },
+        }"##,
+    );
+    project.write(
+        "tsconfig.json",
+        r##"{ "extends": "./configs/tsconfig.base", "compilerOptions": {} }"##,
+    );
+    project.write(
+        "package.json",
+        r##"{
+            "name": "mylib",
+            "imports": { "#src/*": { "my-condition": "./src/*.ts", "default": "./dist/*.d.ts" } }
+        }"##,
+    );
+    let target = project.write("src/foo.ts", "export const x = 1;\n");
+    project.write("dist/foo.d.ts", "export declare const x: number;\n");
+    let importer = project.write("src/importer.ts", "");
+    let resolver = project.resolver(Some("tsconfig.json"));
+
+    assert_eq!(
+        resolver.resolve(&importer, "#src/foo"),
+        Provenance::Internal(target)
+    );
+}
+
+/// `customConditions` is a non-merged compiler option: the extending config's
+/// own value (even an empty array) replaces the base's entirely.
+#[test]
+fn custom_condition_override_in_extending_config_wins() {
+    let project = Project::new();
+    project.write(
+        "tsconfig.base.json",
+        r##"{ "compilerOptions": { "customConditions": ["base-condition"] } }"##,
+    );
+    project.write(
+        "tsconfig.json",
+        r##"{ "extends": "./tsconfig.base.json", "compilerOptions": { "customConditions": [] } }"##,
+    );
+    project.write(
+        "package.json",
+        r##"{
+            "name": "mylib",
+            "imports": { "#src/*": { "base-condition": "./src/*.ts", "default": "./dist/*.d.ts" } }
+        }"##,
+    );
+    project.write("src/foo.ts", "export const x = 1;\n");
+    let target = project.write("dist/foo.d.ts", "export declare const x: number;\n");
+    let importer = project.write("src/importer.ts", "");
+    let resolver = project.resolver(Some("tsconfig.json"));
+
+    assert_eq!(
+        resolver.resolve(&importer, "#src/foo"),
+        Provenance::Internal(target)
+    );
+}
+
+/// An `extends` target that's a bare package specifier resolves through
+/// `node_modules`, like tsc's own config resolution.
+#[test]
+fn custom_condition_from_extends_node_modules_package() {
+    let project = Project::new();
+    project.write(
+        "node_modules/@shared/tsconfig/package.json",
+        r##"{ "name": "@shared/tsconfig" }"##,
+    );
+    project.write(
+        "node_modules/@shared/tsconfig/tsconfig.json",
+        r##"{ "compilerOptions": { "customConditions": ["my-condition"] } }"##,
+    );
+    project.write(
+        "tsconfig.json",
+        r##"{ "extends": "@shared/tsconfig/tsconfig.json" }"##,
+    );
+    project.write(
+        "package.json",
+        r##"{
+            "name": "mylib",
+            "imports": { "#src/*": { "my-condition": "./src/*.ts", "default": "./dist/*.d.ts" } }
+        }"##,
+    );
+    let target = project.write("src/foo.ts", "export const x = 1;\n");
+    project.write("dist/foo.d.ts", "export declare const x: number;\n");
+    let importer = project.write("src/importer.ts", "");
+    let resolver = project.resolver(Some("tsconfig.json"));
+
+    assert_eq!(
+        resolver.resolve(&importer, "#src/foo"),
+        Provenance::Internal(target)
+    );
+}
+
 // ---- node_modules packages ----
 
 #[test]

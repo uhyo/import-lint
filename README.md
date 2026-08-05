@@ -180,7 +180,7 @@ import-lint [paths...]
 | `--config <path>` | Explicit config file. Exits `2` if missing or invalid. | discovered by walking up from cwd |
 | `--format <pretty\|json\|github>` | Output format — see [Output formats](#output-formats). | `pretty` |
 | `--threads <n>` | Rayon thread pool size for parsing/resolving. | number of cores |
-| `--tsconfig <path>` | Path to the project's `tsconfig.json`, for resolver `paths`/`baseUrl`. Overrides the config file | config `tsconfig`, else `<project root>/tsconfig.json` if present |
+| `--tsconfig <path>` | Path to the project's `tsconfig.json`, for resolver `paths`/`baseUrl`/`customConditions`. Overrides the config file | config `tsconfig`, else `<project root>/tsconfig.json` if present |
 | `--report-unresolved` | Emit a warning for every import specifier that fails to resolve, instead of skipping it silently. | off |
 | `--quiet` | Suppress warning-severity output (errors only), like `eslint --quiet`. | off |
 | `--watch` | Watch mode: re-lint on file changes — see [Watch mode](#watch-mode). | off |
@@ -235,8 +235,9 @@ explains each with a worked example.
   // Extra glob patterns to skip, on top of .gitignore. Relative to the project root.
   "exclude": [],
 
-  // Path to tsconfig.json (for resolver `paths`/`baseUrl`), relative to the
-  // project root. Defaults to "<project root>/tsconfig.json" if it exists.
+  // Path to tsconfig.json (for resolver `paths`/`baseUrl`/`customConditions`),
+  // relative to the project root.
+  // Defaults to "<project root>/tsconfig.json" if it exists.
   // "tsconfig": "./tsconfig.json",
 
   "rules": {

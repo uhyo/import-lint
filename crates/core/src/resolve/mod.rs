@@ -9,6 +9,7 @@
 //! the CLI crate.
 
 mod builtins;
+mod custom_conditions;
 mod package_json;
 mod provenance;
 
@@ -58,6 +59,23 @@ impl ProjectResolver {
         ambient_modules: HashMap<CompactStr, PathBuf>,
         mode: SelfReferenceMode,
     ) -> Self {
+        // "types" must be present for `resolve_dts()`'s exports-map lookup to
+        // prefer `.d.ts` targets (spike S3 gap #4); import/require/node cover
+        // ESM/CJS exports maps encountered along the way. The tsconfig's
+        // `customConditions` (nearest definition in its `extends` chain) are
+        // appended so conditional `exports`/`imports` entries gated on them
+        // match, exactly as they do for tsc.
+        let mut condition_names: Vec<String> = ["types", "import", "require", "node"]
+            .into_iter()
+            .map(String::from)
+            .collect();
+        if let Some(config_file) = &tsconfig {
+            for condition in custom_conditions::custom_conditions(config_file) {
+                if !condition_names.contains(&condition) {
+                    condition_names.push(condition);
+                }
+            }
+        }
         let options = ResolveOptions {
             cwd: Some(project_root.to_path_buf()),
             tsconfig: tsconfig.map(|config_file| {
@@ -66,15 +84,7 @@ impl ProjectResolver {
                     references: TsconfigReferences::Auto,
                 })
             }),
-            // "types" must be present for `resolve_dts()`'s exports-map lookup to
-            // prefer `.d.ts` targets (spike S3 gap #4); import/require/node cover
-            // ESM/CJS exports maps encountered along the way.
-            condition_names: vec![
-                "types".to_string(),
-                "import".to_string(),
-                "require".to_string(),
-                "node".to_string(),
-            ],
+            condition_names,
             main_fields: vec!["module".to_string(), "main".to_string()],
             // TS-style extension substitution: a `.js`/`.jsx` path in source or an
             // exports-map target may actually be implemented by a `.ts`/`.tsx`/`.d.ts`
