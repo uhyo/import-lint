@@ -37,7 +37,10 @@ jsonc-parser = "0.33"
 nodejs-built-in-modules = "1.0"
 rayon = "1.10"
 serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
+# `preserve_order` keeps JSON object key order (config files flow through
+# `serde_json::Value` via jsonc-parser), which the `nonTsFiles` rule option's
+# first-matching-entry-wins semantics depend on.
+serde_json = { version = "1.0", features = ["preserve_order"] }
 tempfile = "3.14"
 # Watch mode (M6, PLAN-v1.md §7 / D-W2): pinned exact, like the oxc deps, since a
 # notify major bump can change the event/watcher API shape.

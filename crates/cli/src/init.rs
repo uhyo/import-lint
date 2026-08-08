@@ -99,6 +99,12 @@ pub const TEMPLATE: &str = r#"// .importlintrc.jsonc
       // "packageDirectory": ["packages/*"],  // fixed-location: boundaries live
       //   under one top-level directory instead of being named by suffix
       "packageDirectory": ["**/*.package"],
+
+      // Access levels for the exports of non-TS files (CSS modules, JSON, ...),
+      // which have no JSDoc tags: glob over the exporting file's resolved
+      // project-relative path -> export name -> level. "*" covers every export
+      // except `default`; unassigned exports fall back to defaultImportability.
+      // "nonTsFiles": { "**/*.module.css": { "default": "package", "*": "package" } },
     }
   }
 }

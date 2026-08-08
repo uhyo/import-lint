@@ -267,7 +267,10 @@ mod tests {
                         "defaultImportability": "package",
                         "treatSelfReferenceAs": "internal",
                         "excludeSourcePatterns": ["**/*.gen.ts"],
-                        "packageDirectory": ["**"]
+                        "packageDirectory": ["**"],
+                        "nonTsFiles": {
+                            "**/*.module.css": { "default": "package", "*": "package" }
+                        }
                     }
                 }
             }"#,
@@ -294,6 +297,14 @@ mod tests {
             config.rules.package_access.options.package_directory,
             Some(vec!["**".to_string()])
         );
+        let non_ts = &config.rules.package_access.options.non_ts_files.entries;
+        assert_eq!(non_ts.len(), 1);
+        assert_eq!(non_ts[0].pattern, "**/*.module.css");
+        assert_eq!(
+            non_ts[0].exports.get("default"),
+            Some(&Importability::Package)
+        );
+        assert_eq!(non_ts[0].exports.get("*"), Some(&Importability::Package));
     }
 
     #[test]

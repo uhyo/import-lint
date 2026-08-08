@@ -275,6 +275,15 @@ explains each with a worked example.
       // belongs to a single project-root package. A `!`-prefixed pattern
       // excludes a directory that would otherwise match.
       // "packageDirectory": ["packages/*"],
+
+      // Access levels for the exports of non-TS files (CSS modules, JSON, ...).
+      // Keys are globs matched against the exporting file's resolved
+      // project-relative path (not the import specifier); values map an export
+      // name to "public" | "package" | "private". `"*"` covers every export
+      // except `default` (the ES `export *` convention). Entries are tried in
+      // written order — the first entry that assigns the imported name wins —
+      // and exports no entry assigns fall back to `defaultImportability`.
+      // "nonTsFiles": { "**/*.module.css": { "default": "package", "*": "package" } },
     }
   }
 }
@@ -457,14 +466,22 @@ ImportLint's `package-access` rule is a behavioral port of the plugin's
   import-access/jsdoc` with `// import-lint-disable-next-line` (optionally
   `// import-lint-disable-next-line package-access`) — see
   [Suppressing a violation with a comment](#suppressing-a-violation-with-a-comment).
-- **One deliberate behavioral divergence**: with `packageDirectory` set, a file
-  that has *no* matching ancestor directory belongs to a single project-root
-  package (all such files import freely from each other), where the plugin
-  falls back to the file's own directory as its package. If you relied on the
-  plugin's fallback to keep unmatched directories sealed off from each other,
-  add patterns matching those directories (or `"**"`) to `packageDirectory`.
-  For everyone else this only *removes* errors — it's what makes gradually
-  adopting a boundary-naming convention like `["**/*.package"]` possible.
+- **Two deliberate behavioral divergences**:
+  - With `packageDirectory` set, a file
+    that has *no* matching ancestor directory belongs to a single project-root
+    package (all such files import freely from each other), where the plugin
+    falls back to the file's own directory as its package. If you relied on the
+    plugin's fallback to keep unmatched directories sealed off from each other,
+    add patterns matching those directories (or `"**"`) to `packageDirectory`.
+    For everyone else this only *removes* errors — it's what makes gradually
+    adopting a boundary-naming convention like `["**/*.package"]` possible.
+  - Imports of non-TS files (CSS modules, JSON, ...) are checked too, where the
+    plugin never sees them: their exports get `defaultImportability` unless the
+    `nonTsFiles` option assigns them a level (see [Config file](#config-file)).
+    Under `defaultImportability: "package"` this can surface new errors for
+    cross-package CSS-module imports; add
+    `"nonTsFiles": { "**": { "default": "public", "*": "public" } }` to keep the
+    plugin's don't-check behavior.
 
 ## Performance
 

@@ -555,3 +555,77 @@ fn self_reference_exports_map_js_target_resolves_ts_source() {
         Provenance::Internal(target)
     );
 }
+
+// ---- non-TS files (CSS modules, JSON data, ...) ----
+
+#[test]
+fn relative_css_import_resolves_internal_via_non_ts_fallback() {
+    let project = Project::new();
+    let target = project.write("src/Button.module.css", ".button { color: red; }\n");
+    let importer = project.write("src/Button.tsx", "");
+    let resolver = project.resolver(None);
+
+    assert_eq!(
+        resolver.resolve(&importer, "./Button.module.css"),
+        Provenance::Internal(target)
+    );
+}
+
+#[test]
+fn relative_json_import_resolves_internal_via_non_ts_fallback() {
+    let project = Project::new();
+    let target = project.write("src/data.json", "{\"a\": 1}\n");
+    let importer = project.write("src/importer.ts", "");
+    let resolver = project.resolver(None);
+
+    assert_eq!(
+        resolver.resolve(&importer, "./data.json"),
+        Provenance::Internal(target)
+    );
+}
+
+/// The fallback only fires when TS-style resolution fails: an
+/// `allowArbitraryExtensions`-style declaration file (`styles.d.css.ts`) wins
+/// over the raw `.css` file sitting right next to it.
+#[test]
+fn arbitrary_extension_declaration_file_wins_over_the_raw_css_file() {
+    let project = Project::new();
+    project.write("src/styles.css", ".a {}\n");
+    let dts = project.write(
+        "src/styles.d.css.ts",
+        "declare const styles: string;\nexport default styles;\n",
+    );
+    let importer = project.write("src/importer.ts", "");
+    let resolver = project.resolver(None);
+
+    assert_eq!(
+        resolver.resolve(&importer, "./styles.css"),
+        Provenance::Internal(dts)
+    );
+}
+
+#[test]
+fn missing_non_ts_import_stays_unresolved() {
+    let project = Project::new();
+    let importer = project.write("src/importer.ts", "");
+    let resolver = project.resolver(None);
+
+    assert_eq!(
+        resolver.resolve(&importer, "./missing.css"),
+        Provenance::Unresolved
+    );
+}
+
+#[test]
+fn node_modules_css_import_is_external() {
+    let project = Project::new();
+    project.write("node_modules/pkg/package.json", r#"{ "name": "pkg" }"#);
+    project.write("node_modules/pkg/styles.css", ".a {}\n");
+    let importer = project.write("src/importer.ts", "");
+    let resolver = project.resolver(None);
+
+    assert_eq!(
+        resolver.resolve(&importer, "pkg/styles.css"),
+        Provenance::External
+    );
+}

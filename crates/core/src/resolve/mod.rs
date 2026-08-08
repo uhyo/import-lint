@@ -169,8 +169,36 @@ impl ProjectResolver {
         // entry point (spike S3): plain `resolve()` cannot reach types-only
         // packages (no `main`/`module` field at all).
         let result = self.resolver.resolve_dts(importer, specifier);
+
+        // 5. Non-TS fallback: `resolve_dts()` mirrors tsc's algorithm, which never
+        // loads a file whose extension it doesn't know (`./a.module.css` only makes
+        // it look for `a.module.d.css.ts`). Bundlers do resolve such imports, and
+        // the `nonTsFiles` rule option assigns access levels to their exports — so
+        // when the TS algorithm finds nothing, retry with the plain (bundler-style)
+        // algorithm and accept the result only if it lands on a file ImportLint
+        // cannot parse as a module. A TS/JS target stays with `resolve_dts()`'s
+        // verdict (Unresolved): the fallback adds non-TS resolution, it never
+        // second-guesses TS/JS resolution semantics.
+        if result.is_err() {
+            let importer_dir = importer.parent().unwrap_or(importer);
+            if let Ok(resolution) = self.resolver.resolve(importer_dir, specifier)
+                && is_non_ts_path(resolution.path())
+            {
+                return provenance::classify(specifier, Ok(resolution));
+            }
+        }
+
         provenance::classify(specifier, result)
     }
+}
+
+/// Is `path` a file ImportLint cannot parse as a TS/JS module — a "non-TS file"
+/// (`.css`, `.json`, `.svg`, ...)? Purely name-based, and exactly the complement of
+/// the extraction phase's own extension check (`oxc_span::SourceType::from_path`),
+/// so a path this returns `true` for is never extracted and never has an export
+/// table in the graph.
+pub fn is_non_ts_path(path: &Path) -> bool {
+    oxc_span::SourceType::from_path(path).is_err()
 }
 
 /// `specifier === name || specifier.startsWith(name + "/")`, purely string-based,
