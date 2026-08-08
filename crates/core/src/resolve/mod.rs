@@ -179,7 +179,14 @@ impl ProjectResolver {
         // cannot parse as a module. A TS/JS target stays with `resolve_dts()`'s
         // verdict (Unresolved): the fallback adds non-TS resolution, it never
         // second-guesses TS/JS resolution semantics.
-        if result.is_err() {
+        //
+        // The `has_non_ts_extension` gate keeps this off resolution's hot failure
+        // path: a specifier with a TS/JS extension can only produce a target the
+        // fallback would reject, and an extensionless one only resolves non-TS
+        // through extension *addition* (`./data` -> `data.json`), which tsc never
+        // does — so only a specifier that names a non-TS extension itself (the way
+        // asset imports are actually written) pays for the second resolution.
+        if result.is_err() && has_non_ts_extension(specifier) {
             let importer_dir = importer.parent().unwrap_or(importer);
             if let Ok(resolution) = self.resolver.resolve(importer_dir, specifier)
                 && is_non_ts_path(resolution.path())
@@ -199,6 +206,28 @@ impl ProjectResolver {
 /// table in the graph.
 pub fn is_non_ts_path(path: &Path) -> bool {
     oxc_span::SourceType::from_path(path).is_err()
+}
+
+/// Does `specifier` itself name a non-TS file extension (`./a.module.css`,
+/// `pkg/data.json`, ...)? The gate for the non-TS resolver fallback: `false` for
+/// extensionless specifiers and for TS/JS source extensions, so the fallback's
+/// second resolution never runs where its result would be rejected anyway. Any
+/// query/fragment suffix (`./a.css?raw`) is ignored, matching the resolver's own
+/// specifier parsing.
+fn has_non_ts_extension(specifier: &str) -> bool {
+    let path_part = specifier.split(['?', '#']).next().unwrap_or(specifier);
+    let Some((_, extension)) = path_part.rsplit_once('.') else {
+        return false;
+    };
+    // A '/' after the last '.' means the final path component is extensionless
+    // (`../x/y`); an empty extension (`./foo.`) names nothing either.
+    if extension.is_empty() || extension.contains('/') {
+        return false;
+    }
+    !matches!(
+        extension,
+        "ts" | "tsx" | "mts" | "cts" | "js" | "jsx" | "mjs" | "cjs"
+    )
 }
 
 /// `specifier === name || specifier.startsWith(name + "/")`, purely string-based,

@@ -112,7 +112,9 @@ Non-TS files
   module (CSS modules, JSON, SVG, ...) are checked too. Such files have no
   JSDoc tags, so each imported name's access level comes from the config's
   `nonTsFiles` option (see `import-lint docs config`), falling back to
-  `defaultImportability`.
+  `defaultImportability`. The specifier must name the non-TS extension
+  itself ("./a.module.css"); like tsc, ImportLint never resolves an
+  extensionless specifier to a non-TS file.
 
 Full guide:
 https://github.com/uhyo/import-lint/blob/master/docs/guides/concepts.md

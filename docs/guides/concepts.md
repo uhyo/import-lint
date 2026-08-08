@@ -470,6 +470,10 @@ file has no JSDoc tags, so its exports get the config's
 }
 ```
 
+The import specifier must name the non-TS extension itself
+(`./Button.module.css`): like tsc, ImportLint never resolves an
+extensionless specifier to a non-TS file.
+
 Each key is a glob matched against the exporting file's **resolved
 project-relative path** (not the import specifier); each value maps an
 export name to `"public"` | `"package"` | `"private"`. The name `"*"`

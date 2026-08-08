@@ -629,3 +629,35 @@ fn node_modules_css_import_is_external() {
         Provenance::External
     );
 }
+
+/// The fallback is gated on the specifier naming a non-TS extension itself:
+/// an extensionless specifier never resolves to a non-TS file through
+/// extension addition (`./data` -> `data.json` is a thing bundlers do but tsc
+/// never does), and the gate keeps the second resolution off the hot
+/// unresolved path.
+#[test]
+fn extensionless_specifier_never_uses_the_non_ts_fallback() {
+    let project = Project::new();
+    project.write("src/data.json", "{}\n");
+    let importer = project.write("src/importer.ts", "");
+    let resolver = project.resolver(None);
+
+    assert_eq!(
+        resolver.resolve(&importer, "./data"),
+        Provenance::Unresolved
+    );
+}
+
+/// A query/fragment suffix on the specifier doesn't defeat the fallback gate.
+#[test]
+fn non_ts_specifier_with_query_suffix_resolves_internal() {
+    let project = Project::new();
+    let target = project.write("src/styles.css", ".a {}\n");
+    let importer = project.write("src/importer.ts", "");
+    let resolver = project.resolver(None);
+
+    assert_eq!(
+        resolver.resolve(&importer, "./styles.css?raw"),
+        Provenance::Internal(target)
+    );
+}
