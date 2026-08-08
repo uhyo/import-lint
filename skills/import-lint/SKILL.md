@@ -25,6 +25,10 @@ for eslint-plugin-import-access.
   `defaultImportability` — even if the original export was `@public`.
 - Only imports resolving to files inside the project are checked; npm packages and Node builtins
   are never flagged.
+- Imports of **non-TS files** (CSS modules, JSON, ...) are checked too. They carry no JSDoc tags:
+  each imported name's access level comes from the config's `nonTsFiles` option (a map from a glob
+  over resolved project-relative paths to `{exportName: level}`; `"*"` covers every export except
+  `default`), falling back to `defaultImportability`.
 
 ## Annotation syntax
 

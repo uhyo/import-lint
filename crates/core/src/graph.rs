@@ -12,7 +12,7 @@ use std::sync::Arc;
 use oxc_str::CompactStr;
 
 use crate::extract::FileModuleInfo;
-use crate::resolve::Provenance;
+use crate::resolve::{Provenance, is_non_ts_path};
 
 /// Every extracted file, every computed resolution, and the reverse edges derived
 /// from them.
@@ -36,6 +36,12 @@ pub struct ModuleGraph {
     /// they're a resolution target) — only these files' `checked_entries` get
     /// linted.
     pub lint_targets: HashSet<PathBuf>,
+    /// Internal resolution targets that are non-TS files (`.css`, `.json`, ... —
+    /// see [`is_non_ts_path`]): reachable through the non-TS resolver fallback,
+    /// never extracted, so they have no entry in `files`. The rule engine checks
+    /// imports from these against the `nonTsFiles` option instead of an export
+    /// table. Derived here from `resolutions`, not supplied by the caller.
+    pub non_ts_files: HashSet<PathBuf>,
 }
 
 impl ModuleGraph {
@@ -79,7 +85,21 @@ impl ModuleGraph {
             }
         }
 
-        let files = files.into_iter().map(|f| (f.path.clone(), f)).collect();
+        let files: HashMap<PathBuf, Arc<FileModuleInfo>> =
+            files.into_iter().map(|f| (f.path.clone(), f)).collect();
+
+        // A non-TS internal target is recognizable from its path alone; the
+        // `files` guard is belt-and-braces (extraction never parses such a path,
+        // so it can never appear in `files`).
+        let non_ts_files: HashSet<PathBuf> = resolutions
+            .values()
+            .filter_map(|provenance| match provenance {
+                Provenance::Internal(path) if !files.contains_key(path) && is_non_ts_path(path) => {
+                    Some(path.clone())
+                }
+                _ => None,
+            })
+            .collect();
 
         Self {
             files,
@@ -87,6 +107,7 @@ impl ModuleGraph {
             importers,
             star_importers,
             lint_targets,
+            non_ts_files,
         }
     }
 
@@ -177,6 +198,40 @@ mod tests {
         assert!(graph.file(Path::new("/proj/does-not-exist.ts")).is_none());
         assert!(graph.lint_targets.contains(&a.path));
         assert!(!graph.lint_targets.contains(&b.path));
+    }
+
+    #[test]
+    fn non_ts_internal_targets_are_recorded() {
+        let a = file("/proj/a.ts", &["./styles.css", "./b"], &[]);
+        let b = file("/proj/b.ts", &[], &[]);
+
+        let mut resolutions = HashMap::new();
+        resolutions.insert(
+            (a.path.clone(), CompactStr::from("./styles.css")),
+            Provenance::Internal(PathBuf::from("/proj/styles.css")),
+        );
+        resolutions.insert(
+            (a.path.clone(), CompactStr::from("./b")),
+            Provenance::Internal(b.path.clone()),
+        );
+
+        let graph = ModuleGraph::build(vec![a.clone(), b.clone()], resolutions, HashSet::new());
+
+        assert_eq!(
+            graph.non_ts_files,
+            HashSet::from([PathBuf::from("/proj/styles.css")])
+        );
+        // The non-TS target still gets a reverse importer edge (watch mode's
+        // dirty-set computation relies on `importers` covering every internal
+        // edge).
+        assert_eq!(
+            graph
+                .importers
+                .get(Path::new("/proj/styles.css"))
+                .cloned()
+                .unwrap_or_default(),
+            HashSet::from([a.path.clone()])
+        );
     }
 
     #[test]

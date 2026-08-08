@@ -107,6 +107,15 @@ Internal vs. external
   Only imports resolving to files inside the project are checked; npm
   dependencies and Node builtins are never flagged.
 
+Non-TS files
+  Imports that resolve to a project file ImportLint cannot parse as a
+  module (CSS modules, JSON, SVG, ...) are checked too. Such files have no
+  JSDoc tags, so each imported name's access level comes from the config's
+  `nonTsFiles` option (see `import-lint docs config`), falling back to
+  `defaultImportability`. The specifier must name the non-TS extension
+  itself ("./a.module.css"); like tsc, ImportLint never resolves an
+  extensionless specifier to a non-TS file.
+
 Full guide:
 https://github.com/uhyo/import-lint/blob/master/docs/guides/concepts.md
 "#;
@@ -155,6 +164,19 @@ Top-level keys
       basename and the project-relative path). Unset: every directory is
       its own package. A "!"-prefixed pattern excludes an otherwise-
       matching directory.
+  "nonTsFiles": {}
+      Access levels for the exports of non-TS files (CSS modules, JSON,
+      ...). Keys are glob patterns matched against the exporting file's
+      resolved project-relative path (not the import specifier); values
+      map an export name to "public" | "package" | "private". The name
+      "*" covers every export except `default` (the ES `export *`
+      convention). Entries are tried in written order — the first entry
+      that assigns the imported name (directly or via "*") wins, so put
+      more specific patterns first. Exports no entry assigns fall back to
+      `defaultImportability`. Example:
+          "nonTsFiles": {
+            "**/*.module.css": { "default": "package", "*": "package" }
+          }
 
 Full reference:
 https://github.com/uhyo/import-lint/blob/master/README.md#config-file

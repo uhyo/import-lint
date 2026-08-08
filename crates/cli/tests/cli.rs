@@ -523,3 +523,110 @@ fn disable_next_line_suppresses_unresolved_warning_too() {
     assert!(out.status.success(), "stdout: {}", out.stdout);
     assert!(out.stdout.is_empty(), "stdout: {}", out.stdout);
 }
+
+// ---- non-TS files (CSS modules, JSON data, ...) ----
+
+/// A cross-package CSS module import under `defaultImportability: "package"`:
+/// the same-package import passes, the cross-package one is an error attributed
+/// to the importer, and no "unrecognized file extension" noise hits stderr.
+#[test]
+fn non_ts_import_is_checked_under_package_default_importability() {
+    let dir = TempDir::new().unwrap();
+    write(
+        dir.path(),
+        ".importlintrc.jsonc",
+        r#"{ "rules": { "package-access": { "defaultImportability": "package" } } }"#,
+    );
+    write(dir.path(), "src/button/Button.module.css", ".button {}\n");
+    write(
+        dir.path(),
+        "src/button/Button.ts",
+        "import styles from \"./Button.module.css\";\nconsole.log(styles);\n",
+    );
+    write(
+        dir.path(),
+        "src/consumer.ts",
+        "import styles from \"./button/Button.module.css\";\nconsole.log(styles);\n",
+    );
+
+    let out = run_in(dir.path(), &[]);
+
+    assert_eq!(out.status.code(), Some(1));
+    assert!(out.stdout.contains("src/consumer.ts") || out.stdout.contains("src\\consumer.ts"));
+    assert!(
+        out.stdout
+            .contains("Cannot import a package-private export 'default'")
+    );
+    assert!(
+        !out.stdout.contains("Button.ts"),
+        "same-package import must pass: {}",
+        out.stdout
+    );
+    assert!(
+        !out.stderr.contains("unrecognized file extension"),
+        "stderr: {}",
+        out.stderr
+    );
+}
+
+/// `nonTsFiles` overrides per export name: `default` made public passes across
+/// packages, while a named import from the same file hits the `*` -> package
+/// mapping (which never covers `default`).
+#[test]
+fn non_ts_files_option_assigns_access_per_export() {
+    let dir = TempDir::new().unwrap();
+    write(
+        dir.path(),
+        ".importlintrc.jsonc",
+        r#"{
+            "rules": {
+                "package-access": {
+                    "defaultImportability": "package",
+                    "nonTsFiles": {
+                        "**/*.module.css": { "default": "public", "*": "package" }
+                    }
+                }
+            }
+        }"#,
+    );
+    write(dir.path(), "src/button/Button.module.css", ".button {}\n");
+    write(
+        dir.path(),
+        "src/consumer.ts",
+        "import styles from \"./button/Button.module.css\";\n\
+         import { button } from \"./button/Button.module.css\";\n\
+         console.log(styles, button);\n",
+    );
+
+    let out = run_in(dir.path(), &[]);
+
+    assert_eq!(out.status.code(), Some(1));
+    assert!(
+        out.stdout
+            .contains("Cannot import a package-private export 'button'")
+    );
+    assert!(
+        !out.stdout.contains("'default'"),
+        "default import must pass: {}",
+        out.stdout
+    );
+}
+
+/// A resolvable non-TS import is no longer reported by `--report-unresolved`
+/// (it used to be, before the non-TS resolver fallback).
+#[test]
+fn resolvable_non_ts_import_is_not_reported_unresolved() {
+    let dir = TempDir::new().unwrap();
+    write(dir.path(), "src/styles.css", ".a {}\n");
+    write(dir.path(), "src/data.json", "{}\n");
+    write(
+        dir.path(),
+        "src/a.ts",
+        "import styles from \"./styles.css\";\nimport data from \"./data.json\";\nconsole.log(styles, data);\n",
+    );
+
+    let out = run_in(dir.path(), &["--report-unresolved"]);
+
+    assert!(out.status.success(), "stdout: {}", out.stdout);
+    assert_eq!(out.stdout, "");
+}

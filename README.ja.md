@@ -196,6 +196,16 @@ ImportLint は、`--config` で明示的にファイルを指定しない限り�
       // 持たないファイルは、プロジェクトルートの単一パッケージに属します。
       // `!` 付きのパターンで、本来マッチするディレクトリを除外できます。
       // "packageDirectory": ["packages/*"],
+
+      // 非 TS ファイル(CSS Modules、JSON など)のエクスポートに割り当てる
+      // アクセスレベル。キーはエクスポート元ファイルの解決済みプロジェクト相対
+      // パス(import 指定子ではありません)にマッチする glob、値はエクスポート名
+      // から "public" | "package" | "private" へのマッピングです。`"*"` は
+      // `default` を除く任意のエクスポートを表します(ES の `export *` の慣習に
+      // 従います)。エントリは記述順に試され、インポートされた名前を割り当てる
+      // 最初のエントリが勝ちます。どのエントリにも割り当てられないエクスポート
+      // は `defaultImportability` にフォールバックします。
+      // "nonTsFiles": { "**/*.module.css": { "default": "package", "*": "package" } },
     }
   }
 }
@@ -317,7 +327,10 @@ ImportLint の `package-access` ルールはESLintプラグインの `import-acc
 - `json` 出力フォーマットの `ruleId` は `package-access` になっています（`import-access/jsdoc` ではありません）。ESLint プラグインのルール ID を前提にしている CI のフィルタや `reviewdog` のルール ID マッチは更新してください。
 - **抑制コメント**: `// eslint-disable-next-line import-access/jsdoc` は `// import-lint-disable-next-line`(または `// import-lint-disable-next-line package-access`)に置き換えてください。[コメントによる違反の抑制](#コメントによる違反の抑制)を参照してください。
 
-ただし、1つだけ**挙動の変更**があります。`packageDirectory` を設定した場合、マッチする祖先ディレクトリを*持たない*ファイルはプロジェクトルートのパッケージに属し、自由にインポートし合うことができます。ESLint版では、この場合ファイルが属するディレクトリがパッケージとして扱われてしまっていました。
+ただし、2つだけ**挙動の変更**があります。
+
+- `packageDirectory` を設定した場合、マッチする祖先ディレクトリを*持たない*ファイルはプロジェクトルートのパッケージに属し、自由にインポートし合うことができます。ESLint版では、この場合ファイルが属するディレクトリがパッケージとして扱われてしまっていました。
+- ESLint版が一切見ていなかった非 TS ファイル(CSS Modules、JSON など)のインポートもチェック対象です。これらのエクスポートには、`nonTsFiles` オプションでレベルを割り当てない限り `defaultImportability` が適用されます([設定ファイル](#設定ファイル)を参照)。`defaultImportability: "package"` の場合、パッケージ境界をまたぐ CSS Modules のインポートが新たにエラーになることがあります。ESLint版と同じ「チェックしない」挙動を維持するには `"nonTsFiles": { "**": { "default": "public", "*": "public" } }` を追加してください。
 
 ## パフォーマンス
 

@@ -610,8 +610,12 @@ struct Summary {
 /// A `ModuleGraph` view for JSON output with deterministic (`BTreeMap`) key order,
 /// mirroring `InspectOutput`'s treatment of `FileModuleInfo::export_table`.
 #[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 struct GraphOutput {
     files: BTreeMap<String, FileOutput>,
+    /// Internal resolution targets that are non-TS files (checked against the
+    /// `nonTsFiles` rule option rather than an export table), sorted.
+    non_ts_files: Vec<String>,
     summary: Summary,
 }
 
@@ -643,6 +647,13 @@ impl From<&import_lint::ModuleGraph> for GraphOutput {
             );
         }
 
+        let mut non_ts_files: Vec<String> = graph
+            .non_ts_files
+            .iter()
+            .map(|path| path.to_string_lossy().into_owned())
+            .collect();
+        non_ts_files.sort();
+
         GraphOutput {
             summary: Summary {
                 files: graph.files.len(),
@@ -652,6 +663,7 @@ impl From<&import_lint::ModuleGraph> for GraphOutput {
                 unresolved,
             },
             files,
+            non_ts_files,
         }
     }
 }

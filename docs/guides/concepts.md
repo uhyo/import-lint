@@ -451,3 +451,59 @@ as any other node_modules-style resolution. With `treatSelfReferenceAs:
 "internal"`, it's checked exactly like a relative import — if `computeTotal`
 is package-private and `receipt.ts` is outside its package, it's a real
 violation.
+## Non-TS files
+
+Imports that resolve to an internal file ImportLint cannot parse as a
+TS/JS module — CSS modules, JSON, SVG, and so on — are checked too. Such a
+file has no JSDoc tags, so its exports get the config's
+`defaultImportability`, exactly like an untagged TS export, unless the
+`nonTsFiles` option assigns them a level explicitly:
+
+```jsonc
+"rules": {
+  "package-access": {
+    "defaultImportability": "package",
+    "nonTsFiles": {
+      "**/*.module.css": { "default": "package", "*": "package" }
+    }
+  }
+}
+```
+
+The import specifier must name the non-TS extension itself
+(`./Button.module.css`): like tsc, ImportLint never resolves an
+extensionless specifier to a non-TS file.
+
+Each key is a glob matched against the exporting file's **resolved
+project-relative path** (not the import specifier); each value maps an
+export name to `"public"` | `"package"` | `"private"`. The name `"*"`
+covers every export *except* `default`, following the ES spec's `export *`
+convention (which never forwards `default`) — so `default` must be assigned
+by name. Entries are tried in the order written, and the first entry that
+assigns the imported name (directly or via `"*"`) wins: put more specific
+patterns before general ones.
+
+**Example 8:**
+
+`src/button/Button.module.css`:
+
+```css
+.button { color: rebeccapurple; }
+```
+
+`src/receipt/Receipt.tsx`:
+
+```ts
+import styles from "../button/Button.module.css";
+//     ^ error: Cannot import a package-private export 'default'
+```
+
+With the config above, `Button.module.css`'s default export is
+package-private: `src/button/Button.tsx` may import it, `src/receipt/`
+files may not — each component's styles stay its own.
+
+Everything else composes as usual: the in-package decision uses the same
+package-directory rules, `excludeSourcePatterns` skips matching non-TS
+exporters, and suppression directives work at the import site. Since a
+non-TS file has no statically knowable export list, ImportLint assumes any
+imported name exists and checks only its access level.

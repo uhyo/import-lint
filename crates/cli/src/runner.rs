@@ -224,10 +224,18 @@ pub(crate) fn extract_and_link_from(
             resolutions.extend(round);
         });
 
+        // Non-TS internal targets (CSS modules, JSON, ...) are deliberately not
+        // extraction candidates: they have no export table to parse — the graph
+        // records them in `non_ts_files` and the rule engine checks them against
+        // the `nonTsFiles` option instead.
         let mut new_targets: Vec<PathBuf> = resolutions
             .values()
             .filter_map(|provenance| match provenance {
-                Provenance::Internal(path) if !attempted.contains(path) => Some(path.clone()),
+                Provenance::Internal(path)
+                    if !attempted.contains(path) && source_type_for_path(path).is_some() =>
+                {
+                    Some(path.clone())
+                }
                 _ => None,
             })
             .collect();
@@ -357,9 +365,9 @@ fn extract_files(
 
 fn extract_one(path: &Path, pool: &AllocatorPool, overlays: &Overlays) -> Option<FileModuleInfo> {
     // Every walked path already has a recognized extension (`walk()` filters for
-    // it); this branch only fires for a fixpoint-discovered internal resolution
-    // target with an extension ImportLint doesn't parse (e.g. a `.json` data
-    // import) — skip it the same way an unparseable file is skipped.
+    // it), and the fixpoint loop filters non-TS resolution targets out before
+    // extraction, so this branch is defensive only — skip the file the same way
+    // an unparseable one is skipped.
     let Some(source_type) = source_type_for_path(path) else {
         eprintln!(
             "import-lint: {}: unrecognized file extension, skipping",

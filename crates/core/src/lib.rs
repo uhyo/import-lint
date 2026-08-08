@@ -20,5 +20,7 @@ pub use extract::{
     extract as extract_file,
 };
 pub use graph::ModuleGraph;
-pub use resolve::{ProjectResolver, Provenance, SelfReferenceMode};
-pub use rule::{PackageAccessRuleOptions, check_files, check_graph};
+pub use resolve::{ProjectResolver, Provenance, SelfReferenceMode, is_non_ts_path};
+pub use rule::{
+    NonTsFilesEntry, NonTsFilesOption, PackageAccessRuleOptions, check_files, check_graph,
+};
