@@ -446,7 +446,7 @@ dependencies = [
 
 [[package]]
 name = "gen-fixture"
-version = "0.1.8"
+version = "0.1.9"
 
 [[package]]
 name = "getrandom"
@@ -651,7 +651,7 @@ dependencies = [
 
 [[package]]
 name = "import-lint"
-version = "0.1.8"
+version = "0.1.9"
 dependencies = [
  "clap",
  "crossbeam-channel",
@@ -675,7 +675,7 @@ dependencies = [
 
 [[package]]
 name = "import-lint-core"
-version = "0.1.8"
+version = "0.1.9"
 dependencies = [
  "criterion",
  "dunce",
