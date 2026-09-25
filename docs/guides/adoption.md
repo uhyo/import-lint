@@ -214,6 +214,7 @@ option at its built-in default:
 
 ```jsonc
 {
+  "$schema": "./node_modules/@import-lint/cli/config.schema.json",
   "rules": {
     "package-access": {
       "severity": "error"

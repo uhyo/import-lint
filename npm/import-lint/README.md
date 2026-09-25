@@ -42,6 +42,20 @@ npx import-lint --format json
 With no config file, ImportLint lints `.` with the `package-access` rule at `error`
 severity and defaults matching `eslint-plugin-import-access`.
 
+## Configuration schema
+
+The package includes `config.schema.json` for editor completion and validation.
+Add this property to `.importlintrc.jsonc` when the package is installed in the
+project:
+
+```jsonc
+{
+  "$schema": "./node_modules/@import-lint/cli/config.schema.json"
+}
+```
+
+The `$schema` property is metadata for the editor and is ignored by ImportLint.
+
 ## Use in CI
 
 Exit code `1` on any error-severity diagnostic fails the build on violations;

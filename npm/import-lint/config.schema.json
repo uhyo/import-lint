@@ -1,0 +1,113 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://raw.githubusercontent.com/uhyo/import-lint/master/npm/import-lint/config.schema.json",
+  "title": "ImportLint configuration",
+  "description": "Configuration for the import-lint TypeScript/JavaScript linter.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "The JSON Schema used by the editor. ImportLint ignores this property."
+    },
+    "include": {
+      "type": "array",
+      "description": "Roots to walk for lint targets, relative to the project root.",
+      "items": {
+        "type": "string"
+      },
+      "default": ["."]
+    },
+    "exclude": {
+      "type": "array",
+      "description": "Glob patterns excluded from discovery, in addition to .gitignore.",
+      "items": {
+        "type": "string"
+      },
+      "default": []
+    },
+    "tsconfig": {
+      "type": ["string", "null"],
+      "description": "Path to tsconfig.json, relative to the project root."
+    },
+    "rules": {
+      "$ref": "#/definitions/rules"
+    }
+  },
+  "definitions": {
+    "rules": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "package-access": {
+          "$ref": "#/definitions/packageAccessRule"
+        }
+      }
+    },
+    "packageAccessRule": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "severity": {
+          "type": "string",
+          "enum": ["error", "warn", "off"],
+          "description": "Whether violations are errors, warnings, or disabled.",
+          "default": "error"
+        },
+        "indexLoophole": {
+          "type": "boolean",
+          "description": "Treat index files as belonging to their parent directory for package-boundary purposes.",
+          "default": true
+        },
+        "filenameLoophole": {
+          "type": "boolean",
+          "description": "Treat a file and the directory with the same name stem as belonging to the same package.",
+          "default": false
+        },
+        "defaultImportability": {
+          "type": "string",
+          "enum": ["public", "package", "private"],
+          "description": "Access level for exports without a recognized JSDoc access tag.",
+          "default": "public"
+        },
+        "treatSelfReferenceAs": {
+          "type": "string",
+          "enum": ["internal", "external"],
+          "description": "Whether imports through the project's own package name are checked.",
+          "default": "external"
+        },
+        "excludeSourcePatterns": {
+          "type": "array",
+          "description": "Glob patterns for exporting files that should never be checked.",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "packageDirectory": {
+          "type": ["array", "null"],
+          "description": "Glob patterns identifying package-boundary directories.",
+          "items": {
+            "type": "string"
+          }
+        },
+        "nonTsFiles": {
+          "type": "object",
+          "description": "Access levels for exports from non-TypeScript files, keyed by a file glob.",
+          "additionalProperties": {
+            "type": "object",
+            "description": "Export name to access-level mapping. Use * for non-default exports.",
+            "additionalProperties": {
+              "$ref": "#/definitions/importability"
+            }
+          },
+          "default": {}
+        }
+      }
+    },
+    "importability": {
+      "type": "string",
+      "enum": ["public", "package", "private"]
+    }
+  }
+}

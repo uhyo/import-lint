@@ -28,6 +28,7 @@ src/
 
 ```jsonc
 {
+  "$schema": "./node_modules/@import-lint/cli/config.schema.json",
   "rules": {
     "package-access": {
       "defaultImportability": "package"
@@ -146,11 +147,20 @@ import-lint [paths...]
 
 ImportLint は、`--config` で明示的にファイルを指定しない限り、カレントディレクトリからファイルシステムのルートまで上に向かって`.importlintrc.jsonc`(同じディレクトリに `.jsonc` ファイルがない場合は`.importlintrc.json`)を探します。**設定ファイルのあるディレクトリがプロジェクトルートになります**。 `include`、`exclude`、`tsconfig` はすべてそこからの相対パスとして解決されます。設定ファイルが見つからない場合は、カレントディレクトリをプロジェクトルートとして、以下のデフォルトが使われます。
 
+npm パッケージには、エディタの補完・検証用の `config.schema.json` が含まれています。プロジェクトに `@import-lint/cli` をインストールしている場合は、設定に次のプロパティを追加してください。`$schema` は ImportLint 自体には無視されるメタデータです。
+
+```jsonc
+{
+  "$schema": "./node_modules/@import-lint/cli/config.schema.json"
+}
+```
+
 以下は全オプションのクイックリファレンスです(組み込みデフォルト値を併記)。[Concepts ガイド](https://github.com/uhyo/import-lint/blob/master/docs/guides/concepts.md)では各オプションを具体例つきで説明しています。
 
 ```jsonc
 // .importlintrc.jsonc
 {
+  "$schema": "./node_modules/@import-lint/cli/config.schema.json",
   // lint 対象を探索するルート。プロジェクトルートからの相対パス。
   "include": ["."],
 

@@ -134,6 +134,7 @@ File and discovery
   recommended setup.
 
 Top-level keys
+  "$schema": <string>  JSON Schema URI for editor completion (ignored).
   "include": ["."]     Roots to walk for lint targets.
   "exclude": []        Extra glob patterns to skip, on top of .gitignore.
   "tsconfig": <path>   tsconfig.json for resolver paths/baseUrl/customConditions

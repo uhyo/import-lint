@@ -34,6 +34,7 @@ two options that drive this walkthrough:
 // Everything inside it imports freely from everything else inside it; nothing
 // outside can import an export unless it's tagged `@public`.
 {
+  "$schema": "./node_modules/@import-lint/cli/config.schema.json",
   "rules": {
     "package-access": {
       // Every export is package-scoped by default (no JSDoc tag needed).

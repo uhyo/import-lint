@@ -24,7 +24,8 @@
     "import-lint": "bin/import-lint.js"
   },
   "files": [
-    "bin/"
+    "bin/",
+    "config.schema.json"
   ],
   "engines": {
     "node": ">=18"
