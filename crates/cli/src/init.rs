@@ -21,6 +21,8 @@ use std::path::{Path, PathBuf};
 /// string, not a serialization — comments can't come out of `serde_json`.
 pub const TEMPLATE: &str = r#"// .importlintrc.jsonc
 //
+// The schema is included in @import-lint/cli for editor completion and
+// validation.
 // The `*.package` naming convention. Name any directory that should be an
 // encapsulation boundary "foo.package" (e.g. "src/auth.package/",
 // "src/billing.package/"). Everything inside a `*.package` directory, at any
@@ -37,6 +39,7 @@ pub const TEMPLATE: &str = r#"// .importlintrc.jsonc
 // as well as for new projects: adopt boundaries one directory rename at a
 // time.
 {
+  "$schema": "./node_modules/@import-lint/cli/config.schema.json",
   // Roots to walk for lint targets, relative to the project root.
   "include": ["."],
 
@@ -213,6 +216,10 @@ mod tests {
         let path = dir.path().join(".importlintrc.jsonc");
         fs::write(&path, TEMPLATE).unwrap();
         let config = import_lint::LintConfig::load(&path).expect("should parse");
+        assert_eq!(
+            config.schema.as_deref(),
+            Some("./node_modules/@import-lint/cli/config.schema.json")
+        );
         assert_eq!(
             config.rules.package_access.options.default_importability,
             Importability::Package

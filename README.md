@@ -42,6 +42,7 @@ src/
 
 ```jsonc
 {
+  "$schema": "./node_modules/@import-lint/cli/config.schema.json",
   "rules": {
     "package-access": {
       "defaultImportability": "package"
@@ -221,6 +222,11 @@ directory containing the config file becomes the project root**: `include`,
 found, ImportLint uses the defaults below with the project root set to the current
 directory.
 
+The npm package includes `config.schema.json` for editor completion and validation.
+When `@import-lint/cli` is installed in the project, add
+`"$schema": "./node_modules/@import-lint/cli/config.schema.json"` to the config;
+the `$schema` property is ignored by ImportLint itself.
+
 Below is the quick reference for every option (shown with its built-in
 default); the
 [Concepts guide](https://github.com/uhyo/import-lint/blob/master/docs/guides/concepts.md)
@@ -229,6 +235,7 @@ explains each with a worked example.
 ```jsonc
 // .importlintrc.jsonc
 {
+  "$schema": "./node_modules/@import-lint/cli/config.schema.json",
   // Roots to walk for lint targets, relative to the project root.
   "include": ["."],
 
