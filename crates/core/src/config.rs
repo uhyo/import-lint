@@ -20,12 +20,8 @@ const CONFIG_FILE_NAMES: [&str; 2] = [".importlintrc.jsonc", ".importlintrc.json
 
 /// Top-level config file shape.
 #[derive(Debug, Clone, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields, default)]
+#[serde(from = "RawLintConfig")]
 pub struct LintConfig {
-    /// Optional JSON Schema URI used by editors. ImportLint does not interpret
-    /// this metadata field.
-    #[serde(rename = "$schema")]
-    pub schema: Option<String>,
     /// Roots to walk for lint targets, relative to the project root. Default: `["."]`.
     pub include: Vec<String>,
     /// Globs excluded from discovery, in addition to `.gitignore`, relative to the
@@ -39,11 +35,53 @@ pub struct LintConfig {
 impl Default for LintConfig {
     fn default() -> Self {
         Self {
-            schema: None,
             include: vec![".".to_string()],
             exclude: Vec::new(),
             tsconfig: None,
             rules: Rules::default(),
+        }
+    }
+}
+
+/// Deserialization helper for [`LintConfig`]: the same fields plus the
+/// editor-only `$schema` key, which is accepted with any value and discarded, so
+/// it never becomes part of the public struct.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields, default)]
+struct RawLintConfig {
+    #[serde(rename = "$schema")]
+    _schema: serde::de::IgnoredAny,
+    include: Vec<String>,
+    exclude: Vec<String>,
+    tsconfig: Option<PathBuf>,
+    rules: Rules,
+}
+
+impl Default for RawLintConfig {
+    fn default() -> Self {
+        let LintConfig {
+            include,
+            exclude,
+            tsconfig,
+            rules,
+        } = LintConfig::default();
+        Self {
+            _schema: serde::de::IgnoredAny,
+            include,
+            exclude,
+            tsconfig,
+            rules,
+        }
+    }
+}
+
+impl From<RawLintConfig> for LintConfig {
+    fn from(raw: RawLintConfig) -> Self {
+        Self {
+            include: raw.include,
+            exclude: raw.exclude,
+            tsconfig: raw.tsconfig,
+            rules: raw.rules,
         }
     }
 }
@@ -250,10 +288,6 @@ mod tests {
             }"#,
         );
         let config = LintConfig::load(&path).expect("should parse");
-        assert_eq!(
-            config.schema.as_deref(),
-            Some("./node_modules/@import-lint/cli/config.schema.json")
-        );
         assert_eq!(config.include, vec!["src"]);
         assert_eq!(config.rules.package_access.severity, Severity::Warn);
         assert!(!config.rules.package_access.options.index_loophole);
@@ -315,6 +349,25 @@ mod tests {
             Some(&Importability::Package)
         );
         assert_eq!(non_ts[0].exports.get("*"), Some(&Importability::Package));
+    }
+
+    #[test]
+    fn schema_key_is_ignored_whatever_its_value() {
+        let dir = TempDir::new().unwrap();
+        for schema in [
+            r#""./config.schema.json""#,
+            "null",
+            "1",
+            r#"{ "url": "x" }"#,
+        ] {
+            let path = write(
+                dir.path(),
+                ".importlintrc.jsonc",
+                &format!(r#"{{ "$schema": {schema}, "include": ["src"] }}"#),
+            );
+            let config = LintConfig::load(&path).expect("should parse");
+            assert_eq!(config.include, vec!["src"], "$schema: {schema}");
+        }
     }
 
     #[test]
