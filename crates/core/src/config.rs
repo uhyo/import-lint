@@ -22,6 +22,10 @@ const CONFIG_FILE_NAMES: [&str; 2] = [".importlintrc.jsonc", ".importlintrc.json
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields, default)]
 pub struct LintConfig {
+    /// Optional JSON Schema URI used by editors. ImportLint does not interpret
+    /// this metadata field.
+    #[serde(rename = "$schema")]
+    pub schema: Option<String>,
     /// Roots to walk for lint targets, relative to the project root. Default: `["."]`.
     pub include: Vec<String>,
     /// Globs excluded from discovery, in addition to `.gitignore`, relative to the
@@ -35,6 +39,7 @@ pub struct LintConfig {
 impl Default for LintConfig {
     fn default() -> Self {
         Self {
+            schema: None,
             include: vec![".".to_string()],
             exclude: Vec::new(),
             tsconfig: None,
@@ -233,6 +238,7 @@ mod tests {
             dir.path(),
             ".importlintrc.jsonc",
             r#"{
+                "$schema": "./node_modules/@import-lint/cli/config.schema.json",
                 // a comment
                 "include": ["src"],
                 "rules": {
@@ -244,6 +250,10 @@ mod tests {
             }"#,
         );
         let config = LintConfig::load(&path).expect("should parse");
+        assert_eq!(
+            config.schema.as_deref(),
+            Some("./node_modules/@import-lint/cli/config.schema.json")
+        );
         assert_eq!(config.include, vec!["src"]);
         assert_eq!(config.rules.package_access.severity, Severity::Warn);
         assert!(!config.rules.package_access.options.index_loophole);
